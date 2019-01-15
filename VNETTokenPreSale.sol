@@ -133,9 +133,9 @@ contract VNETTokenPreSale is Ownable {
     uint256 public ratioNext; // with 6 decimals
     uint256 public ethPrice; // with 8 decimals
     uint256 public vnetSold; // with 8 decimals
-    uint256 public vnetSupply = 20 * (10 ** 8) * (10 ** 6); // 20 billion supply
+    uint256 public vnetSupply = 30 * (10 ** 8) * (10 ** 6); // 30 billion supply
     uint256 public vnetPriceStart = 0.0013 * (10 ** 8); // 0.0013 USD
-    uint256 public vnetPriceTarget = 0.0026 * (10 ** 8); // 0.0026 USD
+    uint256 public vnetPriceTarget = 0.0035 * (10 ** 8); // 0.0035 USD
     uint256 public weiMinimum = 1 * (10 ** 18); // 1 Ether
     uint256 public weiMaximum = 100 * (10 ** 18); // 100 Ether
     uint256 public weiWelfare = 10 * (10 ** 18); // 10 Ether
@@ -143,16 +143,16 @@ contract VNETTokenPreSale is Ownable {
     mapping(address => bool) public welfare;
 
     event Welfare(address indexed _buyer);
-    event BuyVNET(address indexed _buyer, uint256 _vnetAmount, uint256 _weiAmount);
+    event BuyVNET(address indexed _buyer, uint256 _ratio, uint256 _vnetAmount, uint256 _weiAmount);
     event EthPrice(uint256 _ethPrice);
 
 
     /**
      * @dev Constructor
      */
-    constructor(ERC20Basic _vnetToken, address _wallet, uint256 _ethPrice) public {
+    constructor(ERC20Basic _vnetToken, uint256 _ethPrice) public {
         vnetToken = _vnetToken;
-        wallet = _wallet;
+        wallet = owner;
         calcRatioNext();
         updateEthPrice(_ethPrice);
     }
@@ -177,7 +177,7 @@ contract VNETTokenPreSale is Ownable {
         // Transfer VNET
         if (vnetBalance >= vnetAmount) {
             assert(vnetToken.transfer(msg.sender, vnetAmount));
-            emit BuyVNET(msg.sender, vnetAmount, weiAmount);
+            emit BuyVNET(msg.sender, ratioNext, vnetAmount, weiAmount);
             vnetSold = vnetSold.add(vnetAmount);
             if (weiAmount >= weiWelfare) {
                 welfare[msg.sender] = true;
@@ -186,7 +186,7 @@ contract VNETTokenPreSale is Ownable {
         } else {
             uint256 weiExpend = vnetBalance.mul(10 ** 18).div(ratioNext);
             assert(vnetToken.transfer(msg.sender, vnetBalance));
-            emit BuyVNET(msg.sender, vnetBalance, weiExpend);
+            emit BuyVNET(msg.sender, ratioNext, vnetBalance, weiExpend);
             vnetSold = vnetSold.add(vnetBalance);
             msg.sender.transfer(weiAmount.sub(weiExpend));
             if (weiExpend >= weiWelfare) {
