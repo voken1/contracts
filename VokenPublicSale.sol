@@ -81,12 +81,32 @@ library SafeMath16 {
     }
 
     /**
+     * @dev Subtracts two unsigned integers, reverts on overflow (i.e. if subtrahend is greater than minuend).
+     */
+    function sub(uint16 a, uint16 b) internal pure returns (uint16) {
+        assert(b <= a);
+        return a - b;
+    }
+
+    /**
+     * @dev Multiplies two unsigned integers, reverts on overflow.
+     */
+    function mul(uint16 a, uint16 b) internal pure returns (uint16 c) {
+        if (a == 0) {
+            return 0;
+        }
+        c = a * b;
+        assert(c / a == b);
+        return c;
+    }
+
+    /**
      * @dev Integer division of two unsigned integers truncating the quotient,
      * reverts on division by zero.
      */
     function div(uint16 a, uint16 b) internal pure returns (uint16) {
         assert(b > 0);
-        uint16 c = a / b;
+        uint256 c = a / b;
         assert(a == b * c + a % b);
         return a / b;
     }
@@ -247,11 +267,11 @@ contract VokenPublicSale is Ownable, Pausable{
     using SafeMath16 for uint16;
     using SafeMath256 for uint256;
 
+    // Voken
     IVoken public Voken;
 
-    uint256 private _etherPrice;    // Audit ETH Price, in USD, with 6 decimals
-
-    uint256[15] private _whitelistRefRewards = [    // 35% for 15 levels
+    // referral rewards, 35% for 15 levels
+    uint256[15] private _whitelistRefRewards = [
         6,  // 6% for Level.1
         6,  // 6% for Level.2
         5,  // 5% for Level.3
@@ -269,64 +289,71 @@ contract VokenPublicSale is Ownable, Pausable{
         1   // 1% for Level.15
     ];
 
-    uint256 private _weiMinimum = 100000000000000000;       // 0.1 Ether
-    uint256 private _weiMaximum = 100000000000000000000;    // 100 Ether
-    uint256 private _weiBonus = 10000000000000000000;       //  10 Ether
+    // wei
+    uint256 private _weiMinimum = 100000000000000000;       // 0.1 Ether Minimum
+    uint256 private _weiMaximum = 100000000000000000000;    // 100 Ether Maximum
+    uint256 private _weiBonus = 10000000000000000000;       // >10 Ether for Bonus
 
-    uint256 private _priceStart = 1000;     // $ 0.00100 USD    
-    uint256 private _priceStageStep = 10;   // $ 0.00001 USD
-    uint256 private _price = _priceStart;
+    // price
+    uint256 private _etherPrice;    // Audit ETH Price, in USD, with 6 decimals
 
-    uint256 private _txs;
-    uint256 private _vokenTxs;
-    uint256 private _bonusTxs;
-    uint256 private _whitelistTxs;
-
-    uint256 private _vokenIssued;
-    uint256 private _vokenBonus;
-    uint256 private _vokenWhitelisted;
-
-    uint16 private _stage;
-    uint16 private _stageMax = 60000;   // 60,000 stages total
+    uint256 private _vokenUsdStart = 1000;     // $ 0.00100 USD    
+    uint256 private _vokenUsdStageStep = 10;   // $ 0.00001 USD
+    uint256 private _vokenUsdPrice = _vokenUsdStart;
 
     uint256 private _stageUsdCapStart = 100000000;  // $    100 USD
     uint256 private _stageUsdCapStep = 1000000;     // $     +1 USD
     uint256 private _stageUsdCapMax = 15100000000;  // $ 15,100 USD
 
-    uint256 private _topSalesRatioStart = 15000000;         // 15%, with 8 decimals
-    uint256 private _topSalesRatioProgress = 50000000;      // 50%, with 8 decimals
-    uint256 private _topSalesRatio = _topSalesRatioStart;   // 15% + 50% x(_stage/_stageMax)
-
+    // progress
+    uint16 private _stage;
+    uint16 private _stageMax = 60000;   // 60,000 stages total
     uint16 private _season;
     uint16 private _seasonMax = 100;
     uint16 private _seasonStages = 600; // each 600 stages is a season
 
+    // sum
+    uint256 private _txs;
+    uint256 private _vokenTxs;
+    uint256 private _vokenBonusTxs;
+    uint256 private _vokenWhitelistTxs;
+    uint256 private _vokenIssued;
+    uint256 private _vokenBonus;
+    uint256 private _vokenWhitelist;
+    uint256 private _weiSold;           // Sold,      in wei
+    uint256 private _weiRefRewarded;    // Rewarded,  in wei
+    uint256 private _weiTopSales;       // Top-Sales, in wei
+    uint256 private _weiPending;        // Pending,   in wei
+
+    // Top-Sales
+    uint256 private _topSalesRatioStart = 15000000;         // 15%, with 8 decimals
+    uint256 private _topSalesRatioProgress = 50000000;      // 50%, with 8 decimals
+    uint256 private _topSalesRatio = _topSalesRatioStart;   // 15% + 50% x(_stage/_stageMax)
+
+    // stage
     mapping (uint16 => uint256) private _stageUsdSold;
     mapping (uint16 => uint256) private _stageVokenIssued;
-    mapping (uint16 => uint256) private _seasonUsdSold;
-    mapping (uint16 => uint256) private _seasonVokenIssued;
+
+    // season
     mapping (uint16 => uint256) private _seasonWeiSold;
-    mapping (uint16 => uint256) private _seasonWeiRefRewared;
     mapping (uint16 => uint256) private _seasonWeiTopSales;
-    
+
+    // account
     mapping (address => uint256) private _accountVokenIssued;
     mapping (address => uint256) private _accountVokenBonus;
     mapping (address => uint256) private _accountVokenWhitelisted;
-
     mapping (address => uint256) private _accountWeiPurchased;
     mapping (address => uint256) private _accountWeiRefRewarded;
 
+    // ref
+    mapping (uint16 => address[]) private _seasonRefAccounts;
+    mapping (uint16 => mapping (address => bool)) private _seasonHasRefAccount;
+    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
+    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRef;
+
+    event AuditEtherPriceChanged(uint256 value, address indexed account);
     event StageClosed(uint256 _stageNumber, address indexed account);
     event SeasonClosed(uint16 _seasonNumber, address indexed account);
-
-    uint256 private _weiSold;           // Sold,      in wei
-    uint256 private _weiRefRewarded;    // Rewarded,  in wei
-    uint256 private _weiPending;        // Pending,   in wei
-    uint256 private _weiTopSales;       // Top-Sales, in wei
-    uint256 private _weiRaised;         // Raised,    in wei
-
-    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
-    mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountRef;
 
     /**
      * @dev Audit ETH Price, in USD
@@ -336,207 +363,18 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev Voken price of current stage
-     */
-    function price() public view returns (uint256) {
-        return _price;
-    }
-    
-    /**
-     * @dev Tx counter 
-     */
-    function txs() public view returns (uint256) {
-        return _txs;
-    }
-
-    /**
-     * @dev Voken Tx counter 
-     */
-    function vokenTxs() public view returns (uint256) {
-        return _vokenTxs;
-    }
-
-    /**
-     * @dev Bonus Tx counter 
-     */
-    function bonusTxs() public view returns (uint256) {
-        return _bonusTxs;
-    }
-
-    /**
-     * @dev Whitelist Tx counter 
-     */
-    function whitelistTxs() public view returns (uint256) {
-        return _whitelistTxs;
-    }
-
-    /**
-     * @dev Voken issued 
-     */
-    function vokenIssued() public view returns (uint256) {
-        return _vokenIssued;
-    }
-
-    /**
-     * @dev Voken bonus 
-     */
-    function vokenBonus() public view returns (uint256) {
-        return _vokenBonus;
-    }
-
-    /**
-     * @dev stage index
-     */
-    function stage() public view returns (uint16) {
-        return _stage;
-    }
-
-    /**
-     * @dev Top-Sales ratio
-     */
-    function topSalesRatio() public view returns (uint256) {
-        return _topSalesRatio;
-    }
-
-    /**
-     * @dev season number
-     */
-    function season() public view returns (uint16) {
-        return _season;
-    }
-
-    /**
-     * @dev Sold, in wei
-     */
-    function weiSold() public view returns (uint256) {
-        return _weiSold;
-    }
-
-    /**
-     * @dev Referral rewarded, in wei
-     */
-    function weiRefRewarded() public view returns (uint256) {
-        return _weiRefRewarded;
-    }
-
-    /**
-     * @dev Pending, in wei
-     */
-    function weiPending() public view returns (uint256) {
-        return _weiPending;
-    }
-
-    /**
-     * @dev Top-Sales, in wei
-     */
-    function weiTopSales() public view returns (uint256) {
-        return _weiTopSales;
-    }
-
-    /**
-     * @dev Raised, in wei
-     */
-    function weiRaised() public view returns (uint256) {
-        return _weiSold.sub(_weiRefRewarded).sub(_weiTopSales).sub(_weiPending);
-    }
-
-    /**
-     * @dev stage dollor sold, by stage index
-     */
-    function stageUsdSold(uint16 stageIndex) public view returns (uint256) {
-        return _stageUsdSold[stageIndex];
-    }
-
-    /**
-     * @dev stage Voken issued, by stage index
-     */
-    function stageVokenIssued(uint16 stageIndex) public view returns (uint256) {
-        return _stageVokenIssued[stageIndex];
-    }
-
-    /**
-     * @dev season dollor sold, by season index
-     */
-    function seasonUsdSold(uint16 seasonIndex) public view returns (uint256) {
-        return _seasonUsdSold[seasonIndex];
-    }
-
-    /**
-     * @dev season Voken issued, by season index
-     */
-    function seasonVokenIssued(uint16 seasonIndex) public view returns (uint256) {
-        return _seasonVokenIssued[seasonIndex];
-    }
-
-    /**
-     * @dev season urchased, by season index, in wei
-     */
-    function seasonWeiSold(uint16 seasonIndex) public view returns (uint256) {
-        return _seasonWeiSold[seasonIndex];
-    }
-
-    /**
-     * @dev season referral rewared, by season index, in wei
-     */
-    function seasonWeiRefRewared(uint16 seasonIndex) public view returns (uint256) {
-        return _seasonWeiRefRewared[seasonIndex];
-    }
-
-    /**
-     * @dev season Top-Sales, by season index, in wei
-     */
-    function seasonWeiTopSales(uint16 seasonIndex) public view returns (uint256) {
-        return _seasonWeiTopSales[seasonIndex];
-    }
-
-    /**
-     * @dev Voken issued, by account
-     */
-    function accountVokenIssued(address account) public view returns (uint256) {
-        return _accountVokenIssued[account];
-    }
-
-    /**
-     * @dev Voken bonus, by account
-     */
-    function accountVokenBonus(address account) public view returns (uint256) {
-        return _accountVokenBonus[account];
-    }
-
-    /**
-     * @dev Voken whitelisted, by account
-     */
-    function accountVokenWhitelisted(address account) public view returns (uint256) {
-        return _accountVokenWhitelisted[account];
-    }
-
-    /**
-     * @dev Wei purchased, by account
-     */
-    function accountWeiPurchased(address account) public view returns (uint256) {
-        return _accountWeiPurchased[account];
-    }
-
-    /**
-     * @dev Wei rewared, by account
-     */
-    function accountWeiRefRewarded(address account) public view returns (uint256) {
-        return _accountWeiRefRewarded[account];
-    }
-
-    /**
      * @dev set Audit ETH USD Price (1 Ether = xx.xxxxxx USD)
      */
-    function setEtherPrice(uint256 etherPrice) external onlyOwner returns (bool) {
-        _etherPrice = etherPrice;
-        return true;
+    function setEtherPrice(uint256 value) public onlyOwner {
+        _etherPrice = value;
+        emit AuditEtherPriceChanged(value, msg.sender);
     }
 
     /**
      * @dev stage Voken price in USD, by stage index
      */
-    function stagePrice(uint16 stageIndex) public view returns (uint256) {
-        return _priceStart.add(_priceStageStep.mul(stageIndex));
+    function stageVokenUsdPrice(uint16 stageIndex) private view returns (uint256) {
+        return _vokenUsdStart.add(_vokenUsdStageStep.mul(stageIndex));
     }
 
     /**
@@ -557,27 +395,62 @@ contract VokenPublicSale is Ownable, Pausable{
      * @dev USD => voken
      */
     function usd2voken(uint256 usdAmount) private view returns (uint256) {
-        return usdAmount.mul(1000000).div(_price);
-    }
-
-    /**
-     * @dev USD => wei, for Top-Sales
-     */
-    function usd2weiTopSales(uint256 usdAmount) public view returns (uint256) {
-        return usd2wei(usdAmount.mul(_topSalesRatio).div(100000000));
+        return usdAmount.mul(1000000).div(_vokenUsdPrice);
     }
 
     /**
      * @dev USD => voken
      */
     function usd2vokenByStage(uint256 usdAmount, uint16 stageIndex) public view returns (uint256) {
-        return usdAmount.mul(1000000).div(stagePrice(stageIndex));
+        return usdAmount.mul(1000000).div(stageVokenUsdPrice(stageIndex));
+    }
+
+    /**
+     * @dev status
+     */
+    function status() public view returns (uint16 stage,
+                                           uint16 season,
+                                        //   uint256 auditEtherUsdPrice,
+                                           uint256 vokenUsdPrice,
+                                           uint256 txs,
+                                           uint256 vokenTxs,
+                                           uint256 vokenBonusTxs,
+                                           uint256 vokenWhitelistTxs,
+                                           uint256 vokenIssued,
+                                           uint256 vokenBonus,
+                                           uint256 vokenWhitelist,
+                                           uint256 weiSold,
+                                           uint256 weiReferralRewarded,
+                                           uint256 weiTopSales,
+                                           uint256 weiPending) {
+        if (_stage > _stageMax) {
+            stage = _stageMax;
+            season = _seasonMax;
+        } else {
+            stage = _stage;
+            season = _season;
+        }
+
+        // auditEtherUsdPrice = _etherPrice;
+        vokenUsdPrice = _vokenUsdPrice;
+
+        txs = _txs;
+        vokenTxs = _vokenTxs;
+        vokenBonusTxs = _vokenBonusTxs;
+        vokenWhitelistTxs = _vokenWhitelistTxs;
+        vokenIssued = _vokenIssued;
+        vokenBonus = _vokenBonus;
+        vokenWhitelist = _vokenWhitelist;
+        weiSold = _weiSold;
+        weiReferralRewarded = _weiRefRewarded;
+        weiTopSales = _weiTopSales;
+        weiPending = _weiPending;
     }
 
     /**
      * @dev calculate season number, by stage index
      */
-    function calcSeason(uint16 stageIndex) public view returns (uint16) {
+    function calcSeason(uint16 stageIndex) private view returns (uint16) {
         if (stageIndex > 0) {
             uint16 __seasonNumber = stageIndex.div(_seasonStages);
 
@@ -592,9 +465,23 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
+     * @dev Top-Sales ratio
+     */
+    function topSalesRatio(uint16 stageIndex) private view returns (uint256) {
+        return _topSalesRatioStart.add(_topSalesRatioProgress.mul(stageIndex).div(_stageMax));
+    }
+
+    /**
+     * @dev USD => wei, for Top-Sales
+     */
+    function usd2weiTopSales(uint256 usdAmount) private view returns (uint256) {
+        return usd2wei(usdAmount.mul(_topSalesRatio).div(100000000));
+    }
+
+    /**
      * @dev calculate stage dollor cap, by stage index
      */
-    function stageUsdCap(uint16 stageIndex) public view returns (uint256) {
+    function stageUsdCap(uint16 stageIndex) private view returns (uint256) {
         uint256 __usdCap = _stageUsdCapStart.add(_stageUsdCapStep.mul(stageIndex)); 
 
         if (__usdCap > _stageUsdCapMax) {
@@ -605,25 +492,68 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev stage USD on-sale, by stage index
-     */
-    function stageUsdOnSale(uint16 stageIndex) public view returns (uint256) {
-        return stageUsdCap(stageIndex).sub(stageUsdSold(stageIndex));
-    }
-
-    /**
      * @dev stage Vokdn Cap, by stage index
      */
-    function stageVokenCap(uint16 stageIndex) public view returns (uint256) {
-        uint256 __usdCap = stageUsdCap(stageIndex);
-        return usd2vokenByStage(__usdCap, stageIndex);
+    function stageVokenCap(uint16 stageIndex) private view returns (uint256) {
+        return usd2vokenByStage(stageUsdCap(stageIndex), stageIndex);
     }
 
     /**
-     * @dev stage Vokens on-sale, by stage index
+     * @dev stage status, by stage index
      */
-    function stageVokenOnSale(uint16 stageIndex) public view returns (uint256) {
-        return stageUsdOnSale(stageIndex).mul(1000000).div(stagePrice(stageIndex));
+    function stageStatus(uint16 stageIndex) public view returns (uint256 vokenUsdPrice,
+                                                                 uint256 vokenCap,
+                                                                 uint256 vokenOnSale,
+                                                                 uint256 vokenSold,
+                                                                 uint256 usdCap,
+                                                                 uint256 usdOnSale,
+                                                                 uint256 usdSold,
+                                                                 uint256 weiTopSalesRatio) {
+        if (stageIndex > _stageMax) {
+            return (0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        vokenUsdPrice = stageVokenUsdPrice(stageIndex);
+
+        vokenSold = _stageVokenIssued[stageIndex];
+        vokenCap = stageVokenCap(stageIndex);
+        vokenOnSale = vokenCap.sub(vokenSold);
+
+        usdSold = _stageUsdSold[stageIndex];
+        usdCap = stageUsdCap(stageIndex);
+        usdOnSale = usdCap.sub(usdSold);
+
+        weiTopSalesRatio = topSalesRatio(stageIndex);
+    }
+
+    /**
+     * @dev season Top-Sales rewards, by season number, in wei
+     */
+    function seasonTopSalesRewards(uint16 seasonNumber) public view returns (uint256 weiSold, uint256 weiTopSales) {
+        weiSold = _seasonWeiSold[seasonNumber];
+        weiTopSales = _seasonWeiTopSales[seasonNumber];
+    }
+
+    /**
+     * @dev accountQuery
+     */
+    function accountQuery(address account) public view returns (uint256 vokenIssued,
+                                                                uint256 vokenBonus,
+                                                                uint256 vokenWhitelisted,
+                                                                uint256 weiPurchased,
+                                                                uint256 weiReferralRewarded) {
+        vokenIssued = _accountVokenIssued[account];
+        vokenBonus = _accountVokenBonus[account];
+        vokenWhitelisted = _accountVokenWhitelisted[account];
+        weiPurchased = _accountWeiPurchased[account];
+        weiReferralRewarded = _accountWeiRefRewarded[account];
+    }
+
+    /**
+     * @dev accounts in a specific season
+     */
+    function seasonReferralAccounts(uint16 seasonNumber) public view returns (address[] memory) {
+        return _seasonRefAccounts[seasonNumber];
     }
 
     /**
@@ -634,13 +564,19 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev season => account => referral weis
+     * @dev season => account => referral dollors
      */
-    function weiSeasonAccountRef(uint16 seasonIndex, address account) public view returns (uint256) {
-        return _weiSeasonAccountRef[seasonIndex][account];
+    function usdSeasonAccountReferral(uint16 seasonIndex, address account) public view returns (uint256) {
+        return _usdSeasonAccountRef[seasonIndex][account];
     }
 
-    // without seasonUsdCap() seasonUsdOnSale etc.
+
+
+
+
+
+
+
 
 
     /**
@@ -648,7 +584,7 @@ contract VokenPublicSale is Ownable, Pausable{
      */
     constructor() public {
         Voken = IVoken(0x01dEF33c7B614CbFdD04A243eD5513A763abE39f);
-        _etherPrice = 170000000;
+        setEtherPrice(170000000);
         _stage = 0;
         _season = 1;
     }
@@ -689,13 +625,9 @@ contract VokenPublicSale is Ownable, Pausable{
         // Whitelisted
         // BUY-ONE-AND-GET-ONE-MORE-FREE
         if (Voken.inWhitelist(msg.sender) && __vokenIssued > 0) {
-            assert(vokenWhitelistedTransfer(__vokenIssued));
+            // both issued and bonus
+            assert(vokenWhitelistedTransfer(__vokenIssued.add(__vokenBonus)));
 
-            // SAME to Bonus
-            if (__vokenBonus > 0) {
-                assert(vokenBonusTransfer(__vokenBonus));
-            }
-            
             // 35% for 15 levels
             sendRefRewards(__weiUsed);
         }
@@ -718,25 +650,20 @@ contract VokenPublicSale is Ownable, Pausable{
         }
     }
 
-    /**
-     * @dev send referral rewards
-     */
     function sendRefRewards(uint256 weiAmount) private {
         address __cursor = msg.sender;
         uint256 __weiRemain = weiAmount;
 
         // _whitelistRefRewards
-        for(uint i = 0; i < _whitelistRefRewards.length; i++) {
+        for(uint16 i = 0; i < _whitelistRefRewards.length; i++) {
             uint256 __weiReward = weiAmount.mul(_whitelistRefRewards[i]).div(100);
             address payable __receiver = address(uint160(Voken.referrer(__cursor)));
 
             if (__cursor != __receiver) {
                 if (Voken.refCount(__receiver) > i) {
                     __receiver.transfer(__weiReward);
-                    _weiSeasonAccountRef[_season][__receiver] = _weiSeasonAccountRef[_season][__receiver].add(weiAmount);
 
                     _weiRefRewarded = _weiRefRewarded.add(__weiReward);
-                    _seasonWeiRefRewared[_season] = _seasonWeiRefRewared[_season].add(__weiReward);
                     _accountWeiRefRewarded[__receiver] = _accountWeiRefRewarded[__receiver].add(__weiReward);
                     __weiRemain = __weiRemain.sub(__weiReward);
                 } else {
@@ -758,7 +685,6 @@ contract VokenPublicSale is Ownable, Pausable{
         
         _vokenIssued = _vokenIssued.add(amount);
         _stageVokenIssued[_stage] = _stageVokenIssued[_stage].add(amount);
-        _seasonVokenIssued[_season] = _seasonVokenIssued[_season].add(amount);
         _accountVokenIssued[msg.sender] = _accountVokenIssued[msg.sender].add(amount);
 
         return Voken.transfer(msg.sender, amount);
@@ -768,7 +694,7 @@ contract VokenPublicSale is Ownable, Pausable{
      * @dev Voken bonus transfer
      */
     function vokenBonusTransfer(uint256 amount) private returns (bool) {
-        _bonusTxs = _bonusTxs.add(1);
+        _vokenBonusTxs = _vokenBonusTxs.add(1);
 
         _vokenBonus = _vokenBonus.add(amount);
         _accountVokenBonus[msg.sender] = _accountVokenBonus[msg.sender].add(amount);
@@ -780,9 +706,9 @@ contract VokenPublicSale is Ownable, Pausable{
      * @dev Voken whitelisted transfer
      */
     function vokenWhitelistedTransfer(uint256 amount) private returns (bool) {
-        _whitelistTxs = _whitelistTxs.add(1);
+        _vokenWhitelistTxs = _vokenWhitelistTxs.add(1);
 
-        _vokenWhitelisted = _vokenWhitelisted.add(amount);
+        _vokenWhitelist = _vokenWhitelist.add(amount);
         _accountVokenWhitelisted[msg.sender] = _accountVokenWhitelisted[msg.sender].add(amount);
 
         return Voken.transfer(msg.sender, amount);
@@ -794,8 +720,8 @@ contract VokenPublicSale is Ownable, Pausable{
     function closeStage() private returns (bool) {
         emit StageClosed(_stage, msg.sender);
         _stage = _stage.add(1);
-        _price = stagePrice(_stage);
-        _topSalesRatio = _topSalesRatioStart.add(_topSalesRatioProgress.mul(_stage).div(_stageMax));
+        _vokenUsdPrice = stageVokenUsdPrice(_stage);
+        _topSalesRatio = topSalesRatio(_stage);
 
         // Close current season?
         uint16 __seasonNumber = calcSeason(_stage);
@@ -807,37 +733,57 @@ contract VokenPublicSale is Ownable, Pausable{
         return true;
     }
 
+    function exCount(uint256 usdAmount) private {
+        uint256 __weiSold = usd2wei(usdAmount);
+        uint256 __weiTopSales = usd2weiTopSales(usdAmount);
+        
+        _stageUsdSold[_stage] = _stageUsdSold[_stage].add(usdAmount);                   // stage sold, in USD
+        _seasonWeiSold[_season] = _seasonWeiSold[_season].add(__weiSold);               // season sold, in wei
+        _seasonWeiTopSales[_season] = _seasonWeiTopSales[_season].add(__weiTopSales);   // season Top-Sales, in wei
+        _weiTopSales = _weiTopSales.add(__weiTopSales);                                 // sum Top-Sales, in wei
+
+        _usdSeasonAccountPurchased[_season][msg.sender] = _usdSeasonAccountPurchased[_season][msg.sender].add(usdAmount);   // season => address => purchased, in USD
+
+        // season referral account
+        if (Voken.inWhitelist(msg.sender)) {
+            address __cursor = msg.sender;
+            for(uint16 i = 0; i < _whitelistRefRewards.length; i++) {
+                address __refAccount = Voken.referrer(__cursor);
+    
+                if (__cursor != __refAccount) {
+                    if (Voken.refCount(__refAccount) > i) {
+                        if (!_seasonHasRefAccount[_season][__refAccount]) {
+                            _seasonRefAccounts[_season].push(__refAccount);
+                            _seasonHasRefAccount[_season][__refAccount] = true;
+                        }
+
+                        _usdSeasonAccountRef[_season][__refAccount] = _usdSeasonAccountRef[_season][__refAccount].add(usdAmount);
+                    }
+                }
+
+                __cursor = Voken.referrer(__cursor);
+            }
+        }
+    }
+
     /**
      * @dev USD => Voken
      */
     function ex(uint256 usdAmount) private returns (uint256, uint256) {
         uint256 __stageUsdCap = stageUsdCap(_stage);
         uint256 __vokenIssued;
-        uint256 __weiSold;
-        uint256 __weiTopSales;
 
         // in stage
         if (_stageUsdSold[_stage].add(usdAmount) <= __stageUsdCap) {
-            __weiSold = usd2wei(usdAmount);
-            
-            _stageUsdSold[_stage] = _stageUsdSold[_stage].add(usdAmount);
-            _seasonUsdSold[_season] = _seasonUsdSold[_season].add(usdAmount);
-            _seasonWeiSold[_season] = _seasonWeiSold[_season].add(__weiSold);
-
-            _usdSeasonAccountPurchased[_season][msg.sender] = _usdSeasonAccountPurchased[_season][msg.sender].add(usdAmount);
+            exCount(usdAmount);
 
             __vokenIssued = usd2voken(usdAmount);
             assert(vokenIssuedTransfer(__vokenIssued));
-            
-            // reached cap? close stage
+
+            // close stage, if stage dollor cap reached
             if (__stageUsdCap == _stageUsdSold[_stage]) {
                 assert(closeStage());
             }
-
-            // Top-Sales
-            __weiTopSales = usd2weiTopSales(usdAmount);
-            _weiTopSales = _weiTopSales.add(__weiTopSales);
-            _seasonWeiTopSales[_season] = _seasonWeiTopSales[_season].add(__weiTopSales);
 
             return (__vokenIssued, 0);
         }
@@ -846,22 +792,11 @@ contract VokenPublicSale is Ownable, Pausable{
         uint256 __usdUsed = __stageUsdCap.sub(_stageUsdSold[_stage]);
         uint256 __usdRemain = usdAmount.sub(__usdUsed);
 
-        __weiSold = usd2wei(__usdUsed);
-
-        _stageUsdSold[_stage] = _stageUsdSold[_stage].add(__usdUsed);
-        _seasonUsdSold[_season] = _seasonUsdSold[_season].add(__usdUsed);
-        _seasonWeiSold[_season] = _seasonWeiSold[_season].add(__weiSold);
-
-        _usdSeasonAccountPurchased[_season][msg.sender] = _usdSeasonAccountPurchased[_season][msg.sender].add(__usdUsed);
+        exCount(__usdUsed);
 
         __vokenIssued = usd2voken(__usdUsed);
         assert(vokenIssuedTransfer(__vokenIssued));
         assert(closeStage());
-
-        // Top-Sales
-        __weiTopSales = usd2weiTopSales(__usdUsed);
-        _weiTopSales = _weiTopSales.add(__weiTopSales);
-        _seasonWeiTopSales[_season] = _seasonWeiTopSales[_season].add(__weiTopSales);
 
         return (__vokenIssued, __usdRemain);
     }
