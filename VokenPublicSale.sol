@@ -326,6 +326,7 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _weiRaised;         // Raised,    in wei
 
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
+    mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountRef;
 
     /**
      * @dev Audit ETH Price, in USD
@@ -632,6 +633,12 @@ contract VokenPublicSale is Ownable, Pausable{
         return _usdSeasonAccountPurchased[seasonIndex][account];
     }
 
+    /**
+     * @dev season => account => referral weis
+     */
+    function weiSeasonAccountRef(uint16 seasonIndex, address account) public view returns (uint256) {
+        return _weiSeasonAccountRef[seasonIndex][account];
+    }
 
     // without seasonUsdCap() seasonUsdOnSale etc.
 
@@ -711,6 +718,9 @@ contract VokenPublicSale is Ownable, Pausable{
         }
     }
 
+    /**
+     * @dev send referral rewards
+     */
     function sendRefRewards(uint256 weiAmount) private {
         address __cursor = msg.sender;
         uint256 __weiRemain = weiAmount;
@@ -723,6 +733,8 @@ contract VokenPublicSale is Ownable, Pausable{
             if (__cursor != __receiver) {
                 if (Voken.refCount(__receiver) > i) {
                     __receiver.transfer(__weiReward);
+                    _weiSeasonAccountRef[_season][__receiver] = _weiSeasonAccountRef[_season][__receiver].add(weiAmount);
+
                     _weiRefRewarded = _weiRefRewarded.add(__weiReward);
                     _seasonWeiRefRewared[_season] = _seasonWeiRefRewared[_season].add(__weiReward);
                     _accountWeiRefRewarded[__receiver] = _accountWeiRefRewarded[__receiver].add(__weiReward);
