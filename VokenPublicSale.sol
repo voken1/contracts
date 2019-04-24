@@ -127,8 +127,10 @@ library SafeMath16 {
  */
 contract Ownable {
     address private _owner;
+    address payable internal _receiver;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event ReceiverChanged(address indexed previousReceiver, address indexed newReceiver);
 
     /**
      * @dev The Ownable constructor sets the original `owner` of the contract
@@ -136,7 +138,8 @@ contract Ownable {
      */
     constructor () internal {
         _owner = msg.sender;
-        emit OwnershipTransferred(address(0), _owner);
+        _receiver = msg.sender;
+        // emit OwnershipTransferred(address(0), _owner);
     }
 
     /**
@@ -160,8 +163,19 @@ contract Ownable {
      */
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0));
+        address __previousOwner = _owner;
         _owner = newOwner;
-        emit OwnershipTransferred(_owner, newOwner);
+        emit OwnershipTransferred(__previousOwner, newOwner);
+    }
+
+    /**
+     * @dev change receiver.
+     */
+    function changeReceiver(address payable newReceiver) external onlyOwner {
+        require(newReceiver != address(0));
+        address __previousReceiver = _receiver;
+        _receiver = newReceiver;
+        emit ReceiverChanged(__previousReceiver, newReceiver);
     }
 
     /**
@@ -181,7 +195,7 @@ contract Ownable {
     }
 
     /**
-     * @dev Withdraw Ether
+     * @dev Withdraw ether
      */
     function withdrawEther(address payable to, uint256 amount) external onlyOwner {
         require(to != address(0));
@@ -326,11 +340,12 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _vokenIssued;
     uint256 private _vokenBonus;
     uint256 private _vokenWhitelist;
-    uint256 private _weiSold;           // Sold,      in wei
-    uint256 private _weiRefRewarded;    // Rewarded,  in wei
-    uint256 private _weiTopSales;       // Top-Sales, in wei
-    uint256 private _weiPending;        // Pending,   in wei
-    uint256 private _weiPendingTransfered;  // Pending transfered,   in wei
+    uint256 private _weiSold;
+    uint256 private _weiRefRewarded;
+    uint256 private _weiTopSales;
+    uint256 private _weiTeam;
+    uint256 private _weiPending;
+    uint256 private _weiPendingTransfered;
 
     // Top-Sales
     uint256 private _topSalesRatioStart = 15000000;         // 15%, with 8 decimals
@@ -482,7 +497,7 @@ contract VokenPublicSale is Ownable, Pausable{
 
         _weiPendingTransfered = _weiPendingTransfered.add(__weiRemain);
         emit PendingTransfered(to, __weiRemain);
-        assert(Voken.transfer(to, __weiRemain));
+        to.transfer(__weiRemain);
     }
 
     /**
@@ -492,6 +507,7 @@ contract VokenPublicSale is Ownable, Pausable{
                                            uint16 stage,
                                            uint16 season,
                                            uint256 vokenUsdPrice,
+                                           uint256 currentTopSalesRatio,
                                            uint256 txs,
                                            uint256 vokenTxs,
                                            uint256 vokenBonusTxs,
@@ -510,6 +526,7 @@ contract VokenPublicSale is Ownable, Pausable{
         }
 
         vokenUsdPrice = _vokenUsdPrice;
+        currentTopSalesRatio = _topSalesRatio;
 
         txs = _txs;
         vokenTxs = _vokenTxs;
@@ -523,16 +540,17 @@ contract VokenPublicSale is Ownable, Pausable{
     /**
      * @dev rewards status
      */
-    function rewardsStatus() public view returns(uint256 weiSold,
-                                                 uint256 weiReferralRewarded,
-                                                 uint256 weiTopSales,
-                                                 uint256 weiPending,
-                                                 uint256 weiPendingTransfered,
-                                                 uint256 weiPendingRemain) {
+    function sum() public view returns(uint256 weiSold,
+                                       uint256 weiReferralRewarded,
+                                       uint256 weiTopSales,
+                                       uint256 weiTeam,
+                                       uint256 weiPending,
+                                       uint256 weiPendingTransfered,
+                                       uint256 weiPendingRemain) {
         weiSold = _weiSold;
         weiReferralRewarded = _weiRefRewarded;
         weiTopSales = _weiTopSales;
-        
+        weiTeam = _weiTeam;
         weiPending = _weiPending;
         weiPendingTransfered = _weiPendingTransfered;
         weiPendingRemain = pendingRemain();
@@ -640,7 +658,7 @@ contract VokenPublicSale is Ownable, Pausable{
         
         _seasonWeiTopSalesTransfered[seasonNumber] = _seasonWeiTopSalesTransfered[seasonNumber].add(__weiRemain);
         emit SeasonTopSalesTransfered(seasonNumber, to, __weiRemain);
-        assert(Voken.transfer(to, __weiRemain));
+        to.transfer(__weiRemain);
     }
 
     /**
@@ -661,8 +679,8 @@ contract VokenPublicSale is Ownable, Pausable{
     /**
      * @dev accounts in a specific season
      */
-    function seasonRefAccounts(uint16 seasonNumber) public view returns (address[] memory) {
-        return _seasonRefAccounts[seasonNumber];
+    function seasonRefAccounts(uint16 seasonNumber) public view returns (address[] memory accounts) {
+        accounts = _seasonRefAccounts[seasonNumber];
     }
 
     /**
@@ -741,12 +759,20 @@ contract VokenPublicSale is Ownable, Pausable{
             msg.sender.transfer(__weiRemain);
         }
 
-        // Tx counter + 1
+        // counter
         if (__weiUsed > 0) {
+            _txs = _txs.add(1);
             _weiSold = _weiSold.add(__weiUsed);
             _accountWeiPurchased[msg.sender] = _accountWeiPurchased[msg.sender].add(__weiUsed);
-            _txs = _txs.add(1);
         }
+
+        // wei team
+        uint256 __weiTeam = _weiSold.sub(_weiRefRewarded).sub(_weiTopSales).sub(_weiPending).sub(_weiTeam);
+        _weiTeam = _weiTeam.add(__weiTeam);
+        _receiver.transfer(__weiTeam);
+        
+        // assert finished
+        assert(true);
     }
 
     /**
@@ -905,5 +931,4 @@ contract VokenPublicSale is Ownable, Pausable{
             __cursor = Voken.referrer(__cursor);
         }
     }
-
 }
