@@ -329,7 +329,7 @@ contract VokenPublicSale is Ownable, Pausable{
     uint16 private _stage;
     uint16 private _stageMax = 60000;   // 60,000 stages total
     uint16 private _season;
-    uint16 private _seasonMax = 100;
+    uint16 private _seasonMax = 100;    // 100 seasons total
     uint16 private _seasonStages = 600; // each 600 stages is a season
 
     // sum
