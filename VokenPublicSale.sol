@@ -1,6 +1,6 @@
 pragma solidity ^0.5.7;
 
-// Voken Migration Contract
+// Voken Public Sale
 // 
 // More info:
 //   https://vision.network
@@ -175,8 +175,8 @@ contract Ownable {
         IERC20 _token = IERC20(tokenAddr);
         require(receiver != address(0));
         uint256 balance = _token.balanceOf(address(this));
-
         require(balance >= amount);
+
         assert(_token.transfer(receiver, amount));
     }
 
@@ -185,10 +185,9 @@ contract Ownable {
      */
     function withdrawEther(address payable to, uint256 amount) external onlyOwner {
         require(to != address(0));
-
         uint256 balance = address(this).balance;
-
         require(balance >= amount);
+
         to.transfer(amount);
     }
 }
@@ -297,9 +296,15 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _weiMaximum = 100 ether;    // 100 Ether Maximum
     uint256 private _weiBonus = 10 ether;       // >10 Ether for Bonus
 
-    // price
-    uint256 private _etherPrice;    // Audit ETH Price, in USD, with 6 decimals
+    // audit ether price
+    uint256 private _etherPrice;    // Audit ETH USD Price (1 Ether = xx.xxxxxx USD, with 6 decimals)
+    event AuditEtherPriceChanged(uint256 value, address indexed account);
 
+    // audit ether price auditor
+    mapping (address => bool) private _etherPriceAuditors;
+    event AuditEtherPriceAuditorChanged(address indexed account, bool state);
+
+    // price
     uint256 private _vokenUsdStart = 1000;     // $ 0.00100 USD    
     uint256 private _vokenUsdStageStep = 10;   // $ 0.00001 USD
     uint256 private _vokenUsdPrice = _vokenUsdStart;
@@ -354,10 +359,13 @@ contract VokenPublicSale is Ownable, Pausable{
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRef;
 
-    event AuditEtherPriceChanged(uint256 value, address indexed account);
+
     event StageClosed(uint256 _stageNumber, address indexed account);
     event SeasonClosed(uint16 _seasonNumber, address indexed account);
 
+    /**
+     * @dev start timestamp
+     */
     function startTimestamp() public view returns (uint32) {
         return _startTimestamp;
     }
@@ -377,11 +385,34 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev set Audit ETH USD Price (1 Ether = xx.xxxxxx USD)
+     * @dev Throws if not ether price auditor.
      */
-    function setEtherPrice(uint256 value) public onlyOwner {
+    modifier onlyEtherPriceAuditor() {
+        require(_etherPriceAuditors[msg.sender]);
+        _;
+    }
+
+    /**
+     * @dev set audit ether price.
+     */
+    function setEtherPrice(uint256 value) public onlyEtherPriceAuditor {
         _etherPrice = value;
         emit AuditEtherPriceChanged(value, msg.sender);
+    }
+
+    /**
+     * @dev get ether price auditor state.
+     */
+    function etherPriceAuditor(address account) public view returns (bool) {
+        return _etherPriceAuditors[account];
+    }
+
+    /**
+     * @dev set ether price auditor state.
+     */
+    function setEtherPriceAuditor(address account, bool state) external onlyOwner {
+        _etherPriceAuditors[account] = state;
+        emit AuditEtherPriceAuditorChanged(account, state);
     }
 
     /**
@@ -483,10 +514,16 @@ contract VokenPublicSale is Ownable, Pausable{
      */
     modifier onlyOnSale() {
         require(_startTimestamp > 0 && now > _startTimestamp, "Voken Public-Sale has not started yet.");
+        require(_etherPrice > 0, "Audit ETH price must be greater than zero.");
         require(!_paused, "Voken Public-Sale is paused.");
         require(_stage <= _stageMax, "Voken Public-Sale Closed.");
         _;
     }
+
+
+
+
+
 
     /**
      * @dev Top-Sales ratio
@@ -602,13 +639,11 @@ contract VokenPublicSale is Ownable, Pausable{
      */
     constructor () public {
         Voken = IVoken(0x01dEF33c7B614CbFdD04A243eD5513A763abE39f);
-        setEtherPrice(170000000);
-        _stage = 60000;
-        _season = 100;
+        // setEtherPrice(170000000);
+        _stage = 0;
+        _season = 1;
 
-        _startTimestamp = 1556071200;
-        _vokenUsdPrice = stageVokenUsdPrice(_stage);
-        _topSalesRatio = topSalesRatio(_stage);
+        _etherPriceAuditors[msg.sender] = true;
     }
 
     /**
