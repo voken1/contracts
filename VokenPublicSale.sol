@@ -126,7 +126,7 @@ library SafeMath16 {
  * @title Ownable
  */
 contract Ownable {
-    address internal _owner;
+    address private _owner;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
 
@@ -198,7 +198,7 @@ contract Ownable {
  * @dev Base contract which allows children to implement an emergency stop mechanism.
  */
 contract Pausable is Ownable {
-    bool internal _paused;
+    bool private _paused;
 
     event Paused(address account);
     event Unpaused(address account);
@@ -218,7 +218,7 @@ contract Pausable is Ownable {
      * @dev Modifier to make a function callable only when the contract is not paused.
      */
     modifier whenNotPaused() {
-        require(!_paused, "Voken Public-Sale is paused.");
+        require(!_paused, "Paused.");
         _;
     }
 
@@ -395,7 +395,7 @@ contract VokenPublicSale is Ownable, Pausable{
     /**
      * @dev set audit ether price.
      */
-    function setEtherPrice(uint256 value) public onlyEtherPriceAuditor {
+    function setEtherPrice(uint256 value) external onlyEtherPriceAuditor {
         _etherPrice = value;
         emit AuditEtherPriceChanged(value, msg.sender);
     }
@@ -515,7 +515,7 @@ contract VokenPublicSale is Ownable, Pausable{
     modifier onlyOnSale() {
         require(_startTimestamp > 0 && now > _startTimestamp, "Voken Public-Sale has not started yet.");
         require(_etherPrice > 0, "Audit ETH price must be greater than zero.");
-        require(!_paused, "Voken Public-Sale is paused.");
+        require(!paused(), "Voken Public-Sale is paused.");
         require(_stage <= _stageMax, "Voken Public-Sale Closed.");
         _;
     }
@@ -639,7 +639,6 @@ contract VokenPublicSale is Ownable, Pausable{
      */
     constructor () public {
         Voken = IVoken(0x01dEF33c7B614CbFdD04A243eD5513A763abE39f);
-        // setEtherPrice(170000000);
         _stage = 0;
         _season = 1;
 
