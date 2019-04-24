@@ -298,11 +298,9 @@ contract VokenPublicSale is Ownable, Pausable{
 
     // audit ether price
     uint256 private _etherPrice;    // Audit ETH USD Price (1 Ether = xx.xxxxxx USD, with 6 decimals)
-    event AuditEtherPriceChanged(uint256 value, address indexed account);
 
     // audit ether price auditor
     mapping (address => bool) private _etherPriceAuditors;
-    event AuditEtherPriceAuditorChanged(address indexed account, bool state);
 
     // price
     uint256 private _vokenUsdStart = 1000;     // $ 0.00100 USD    
@@ -332,6 +330,7 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _weiRefRewarded;    // Rewarded,  in wei
     uint256 private _weiTopSales;       // Top-Sales, in wei
     uint256 private _weiPending;        // Pending,   in wei
+    uint256 private _weiPendingTransfered;  // Pending transfered,   in wei
 
     // Top-Sales
     uint256 private _topSalesRatioStart = 15000000;         // 15%, with 8 decimals
@@ -345,6 +344,7 @@ contract VokenPublicSale is Ownable, Pausable{
     // season
     mapping (uint16 => uint256) private _seasonWeiSold;
     mapping (uint16 => uint256) private _seasonWeiTopSales;
+    mapping (uint16 => uint256) private _seasonWeiTopSalesTransfered;
 
     // account
     mapping (address => uint256) private _accountVokenIssued;
@@ -359,6 +359,11 @@ contract VokenPublicSale is Ownable, Pausable{
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRef;
 
+    event AuditEtherPriceChanged(uint256 value, address indexed account);
+    event AuditEtherPriceAuditorChanged(address indexed account, bool state);
+
+    event PendingTransfered(address indexed account, uint256 amount);
+    event SeasonTopSalesTransfered(uint16 seasonNumber, address indexed account, uint256 amount);
 
     event StageClosed(uint256 _stageNumber, address indexed account);
     event SeasonClosed(uint16 _seasonNumber, address indexed account);
@@ -375,13 +380,6 @@ contract VokenPublicSale is Ownable, Pausable{
      */
     function setStartTimestamp(uint32 timestamp) external onlyOwner {
         _startTimestamp = timestamp;
-    }
-
-    /**
-     * @dev Audit ETH Price, in USD
-     */
-    function auditEtherPrice() public view returns (uint256) {
-        return _etherPrice;
     }
 
     /**
@@ -450,47 +448,6 @@ contract VokenPublicSale is Ownable, Pausable{
         return usdAmount.mul(1000000).div(stageVokenUsdPrice(stageIndex));
     }
 
-    /**
-     * @dev status
-     */
-    function status() public view returns (uint16 stage,
-                                           uint16 season,
-                                        //   uint256 auditEtherUsdPrice,
-                                           uint256 vokenUsdPrice,
-                                           uint256 txs,
-                                           uint256 vokenTxs,
-                                           uint256 vokenBonusTxs,
-                                           uint256 vokenWhitelistTxs,
-                                           uint256 vokenIssued,
-                                           uint256 vokenBonus,
-                                           uint256 vokenWhitelist,
-                                           uint256 weiSold,
-                                           uint256 weiReferralRewarded,
-                                           uint256 weiTopSales,
-                                           uint256 weiPending) {
-        if (_stage > _stageMax) {
-            stage = _stageMax;
-            season = _seasonMax;
-        } else {
-            stage = _stage;
-            season = _season;
-        }
-
-        // auditEtherUsdPrice = _etherPrice;
-        vokenUsdPrice = _vokenUsdPrice;
-
-        txs = _txs;
-        vokenTxs = _vokenTxs;
-        vokenBonusTxs = _vokenBonusTxs;
-        vokenWhitelistTxs = _vokenWhitelistTxs;
-        vokenIssued = _vokenIssued;
-        vokenBonus = _vokenBonus;
-        vokenWhitelist = _vokenWhitelist;
-        weiSold = _weiSold;
-        weiReferralRewarded = _weiRefRewarded;
-        weiTopSales = _weiTopSales;
-        weiPending = _weiPending;
-    }
 
     /**
      * @dev calculate season number, by stage index
@@ -510,6 +467,78 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
+     * @dev pending remain, in wei
+     */
+    function pendingRemain() private view returns (uint256) {
+        return _weiPending.sub(_weiPendingTransfered);
+    }
+
+    /**
+     * @dev transfer pending
+     */
+    function transferPending(address payable to) external onlyOwner {
+        uint256 __weiRemain = pendingRemain();
+        require(to != address(0));
+
+        _weiPendingTransfered = _weiPendingTransfered.add(__weiRemain);
+        emit PendingTransfered(to, __weiRemain);
+        assert(Voken.transfer(to, __weiRemain));
+    }
+
+    /**
+     * @dev status
+     */
+    function status() public view returns (uint256 auditEtherPrice,
+                                           uint16 stage,
+                                           uint16 season,
+                                           uint256 vokenUsdPrice,
+                                           uint256 txs,
+                                           uint256 vokenTxs,
+                                           uint256 vokenBonusTxs,
+                                           uint256 vokenWhitelistTxs,
+                                           uint256 vokenIssued,
+                                           uint256 vokenBonus,
+                                           uint256 vokenWhitelist) {
+        auditEtherPrice = _etherPrice;
+
+        if (_stage > _stageMax) {
+            stage = _stageMax;
+            season = _seasonMax;
+        } else {
+            stage = _stage;
+            season = _season;
+        }
+
+        vokenUsdPrice = _vokenUsdPrice;
+
+        txs = _txs;
+        vokenTxs = _vokenTxs;
+        vokenBonusTxs = _vokenBonusTxs;
+        vokenWhitelistTxs = _vokenWhitelistTxs;
+        vokenIssued = _vokenIssued;
+        vokenBonus = _vokenBonus;
+        vokenWhitelist = _vokenWhitelist;
+    }
+
+    /**
+     * @dev rewards status
+     */
+    function rewardsStatus() public view returns(uint256 weiSold,
+                                                 uint256 weiReferralRewarded,
+                                                 uint256 weiTopSales,
+                                                 uint256 weiPending,
+                                                 uint256 weiPendingTransfered,
+                                                 uint256 weiPendingRemain) {
+        weiSold = _weiSold;
+        weiReferralRewarded = _weiRefRewarded;
+        weiTopSales = _weiTopSales;
+        
+        weiPending = _weiPending;
+        weiPendingTransfered = _weiPendingTransfered;
+        weiPendingRemain = pendingRemain();
+    }
+
+    /**
      * @dev Throws if not started.
      */
     modifier onlyOnSale() {
@@ -519,11 +548,6 @@ contract VokenPublicSale is Ownable, Pausable{
         require(_stage <= _stageMax, "Voken Public-Sale Closed.");
         _;
     }
-
-
-
-
-
 
     /**
      * @dev Top-Sales ratio
@@ -588,11 +612,35 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
+     * @dev season Top-Sales remain, in wei
+     */
+    function seasonTopSalesRemain(uint16 seasonNumber) private view returns (uint256) {
+        return _seasonWeiTopSales[seasonNumber].sub(_seasonWeiTopSalesTransfered[seasonNumber]);
+    }
+
+    /**
      * @dev season Top-Sales rewards, by season number, in wei
      */
-    function seasonTopSalesRewards(uint16 seasonNumber) public view returns (uint256 weiSold, uint256 weiTopSales) {
+    function seasonTopSalesRewards(uint16 seasonNumber) public view returns (uint256 weiSold,
+                                                                             uint256 weiTopSales,
+                                                                             uint256 weiTopSalesTransfered,
+                                                                             uint256 weiTopSalesRemain) {
         weiSold = _seasonWeiSold[seasonNumber];
         weiTopSales = _seasonWeiTopSales[seasonNumber];
+        weiTopSalesTransfered = _seasonWeiTopSalesTransfered[seasonNumber];
+        weiTopSalesRemain = seasonTopSalesRemain(seasonNumber);
+    }
+
+    /**
+     * @dev transfer Top-Sales, by season number
+     */
+    function transferTopSales(uint16 seasonNumber, address payable to) external onlyOwner {
+        uint256 __weiRemain = seasonTopSalesRemain(seasonNumber);
+        require(to != address(0));
+        
+        _seasonWeiTopSalesTransfered[seasonNumber] = _seasonWeiTopSalesTransfered[seasonNumber].add(__weiRemain);
+        emit SeasonTopSalesTransfered(seasonNumber, to, __weiRemain);
+        assert(Voken.transfer(to, __weiRemain));
     }
 
     /**
@@ -630,9 +678,6 @@ contract VokenPublicSale is Ownable, Pausable{
     function usdSeasonAccountRef(uint16 seasonIndex, address account) public view returns (uint256) {
         return _usdSeasonAccountRef[seasonIndex][account];
     }
-
-
-
 
     /**
      * @dev constructor
@@ -860,4 +905,5 @@ contract VokenPublicSale is Ownable, Pausable{
             __cursor = Voken.referrer(__cursor);
         }
     }
+
 }
