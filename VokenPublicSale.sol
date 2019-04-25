@@ -279,18 +279,14 @@ contract VokenPublicSale is Ownable, Pausable{
     using SafeMath16 for uint16;
     using SafeMath256 for uint256;
 
-
     // Voken
     IVoken public VOKEN = IVoken(0x759a8f76a36B89c70df23f057f23E3359aac74D6);
-
 
     // Start timestamp
     uint32 _startTimestamp;
 
-
     // Audit ether price
     uint256 private _etherPrice;    // 1 Ether = xx.xxxxxx USD, with 6 decimals
-
 
     // Referral rewards, 35% for 15 levels
     uint16 private WHITELIST_REF_REWARDS_PCT_SUM = 35;
@@ -312,14 +308,12 @@ contract VokenPublicSale is Ownable, Pausable{
         1   // 1% for Level.15
     ];
 
-
     // Wei & Gas
     uint72 private WEI_MIN = 0.1 ether;     // 0.1 Ether Minimum
     uint72 private WEI_MAX = 100 ether;     // 100 Ether Maximum
     uint72 private WEI_BONUS = 10 ether;    // >10 Ether for Bonus
     uint24 private GAS_MIN = 3000000;       // 3.0 Mwei gas Mininum
     uint24 private GAS_EX = 1500000;        // 1.5 Mwei gas for ex
-
 
     // Price
     uint256 private VOKEN_USD_PRICE_START = 1000;       // $      0.00100 USD    
@@ -330,7 +324,6 @@ contract VokenPublicSale is Ownable, Pausable{
 
     uint256 private _vokenUsdPrice = VOKEN_USD_PRICE_START;
 
-
     // Progress
     uint16 private STAGE_MAX = 60000;   // 60,000 stages total
     uint16 private SEASON_MAX = 100;    // 100 seasons total
@@ -338,7 +331,6 @@ contract VokenPublicSale is Ownable, Pausable{
 
     uint16 private _stage;
     uint16 private _season;
-
 
     // Sum
     uint256 private _txs;
@@ -355,13 +347,11 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _weiPending;
     uint256 private _weiPendingTransfered;
 
-
     // Top-Sales
     uint256 private TOP_SALES_RATIO_START = 15000000;         // 15%, with 8 decimals
     uint256 private TOP_SALES_RATIO_DISTANCE = 50000000;      // 50%, with 8 decimals
 
     uint256 private _topSalesRatio = TOP_SALES_RATIO_START;   // 15% + 50% x(_stage/_stageMax)
-
 
     // During tx
     bool private _inWhitelist_;
@@ -369,21 +359,17 @@ contract VokenPublicSale is Ownable, Pausable{
     uint16[] private _rewards_;
     address[] private _referrers_;
 
-
     // Audit ether price auditor
     mapping (address => bool) private _etherPriceAuditors;
-
 
     // Stage
     mapping (uint16 => uint256) private _stageUsdSold;
     mapping (uint16 => uint256) private _stageVokenIssued;
 
-
     // Season
     mapping (uint16 => uint256) private _seasonWeiSold;
     mapping (uint16 => uint256) private _seasonWeiTopSales;
     mapping (uint16 => uint256) private _seasonWeiTopSalesTransfered;
-
 
     // Account
     mapping (address => uint256) private _accountVokenIssued;
@@ -392,23 +378,26 @@ contract VokenPublicSale is Ownable, Pausable{
     mapping (address => uint256) private _accountWeiPurchased;
     mapping (address => uint256) private _accountWeiRefRewarded;
 
-
     // Ref
     mapping (uint16 => address[]) private _seasonRefAccounts;
     mapping (uint16 => mapping (address => bool)) private _seasonHasRefAccount;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRef;
 
-
     // Events
     event AuditEtherPriceChanged(uint256 value, address indexed account);
     event AuditEtherPriceAuditorChanged(address indexed account, bool state);
 
-    event PendingTransfered(address indexed account, uint256 amount);
-    event SeasonTopSalesTransfered(uint16 seasonNumber, address indexed account, uint256 amount);
+    event VokenBonusTransfered(address indexed to, uint256 amount);
+    event VokenWhitelistTransfered(address indexed to, uint256 amount);
+    event VokenIssuedTransfered(uint16 stageIndex, address indexed to, uint256 vokenAmount, uint256 auditEtherPrice, uint256 weiUsed);
 
     event StageClosed(uint256 _stageNumber, address indexed account);
     event SeasonClosed(uint16 _seasonNumber, address indexed account);
+
+    event SeasonTopSalesWeiTransfered(uint16 seasonNumber, address indexed to, uint256 amount);
+    event TeamWeiTransfered(address indexed to, uint256 amount);
+    event PendingWeiTransfered(address indexed to, uint256 amount);
 
 
     /**
@@ -509,6 +498,18 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
+     * @dev Transfer Top-Sales wei, by season number.
+     */
+    function transferTopSales(uint16 seasonNumber, address payable to) external onlyOwner {
+        uint256 __weiRemain = seasonTopSalesRemain(seasonNumber);
+        require(to != address(0));
+        
+        _seasonWeiTopSalesTransfered[seasonNumber] = _seasonWeiTopSalesTransfered[seasonNumber].add(__weiRemain);
+        emit SeasonTopSalesWeiTransfered(seasonNumber, to, __weiRemain);
+        to.transfer(__weiRemain);
+    }
+
+    /**
      * @dev Pending remain, in wei.
      */
     function pendingRemain() private view returns (uint256) {
@@ -516,14 +517,26 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev Transfer pending.
+     * @dev Transfer pending wei.
      */
     function transferPending(address payable to) external onlyOwner {
         uint256 __weiRemain = pendingRemain();
         require(to != address(0));
 
         _weiPendingTransfered = _weiPendingTransfered.add(__weiRemain);
-        emit PendingTransfered(to, __weiRemain);
+        emit PendingWeiTransfered(to, __weiRemain);
+        to.transfer(__weiRemain);
+    }
+
+    /**
+     * @dev Transfer team wei.
+     */
+    function transferTeam(address payable to) external onlyOwner {
+        uint256 __weiRemain = _weiSold.sub(_weiRefRewarded).sub(_weiTopSales).sub(_weiPending).sub(_weiTeam);
+        require(to != address(0));
+
+        _weiTeam = _weiTeam.add(__weiRemain);
+        emit TeamWeiTransfered(to, __weiRemain);
         to.transfer(__weiRemain);
     }
 
@@ -685,18 +698,6 @@ contract VokenPublicSale is Ownable, Pausable{
     }
 
     /**
-     * @dev Transfer Top-Sales, by season number.
-     */
-    function transferTopSales(uint16 seasonNumber, address payable to) external onlyOwner {
-        uint256 __weiRemain = seasonTopSalesRemain(seasonNumber);
-        require(to != address(0));
-        
-        _seasonWeiTopSalesTransfered[seasonNumber] = _seasonWeiTopSalesTransfered[seasonNumber].add(__weiRemain);
-        emit SeasonTopSalesTransfered(seasonNumber, to, __weiRemain);
-        to.transfer(__weiRemain);
-    }
-
-    /**
      * @dev Query account.
      */
     function accountQuery(address account) public view returns (uint256 vokenIssued,
@@ -731,8 +732,6 @@ contract VokenPublicSale is Ownable, Pausable{
     function usdSeasonAccountRef(uint16 seasonNumber, address account) public view returns (uint256) {
         return _usdSeasonAccountRef[seasonNumber][account];
     }
-
-
 
     /**
      * @dev constructor
@@ -861,7 +860,7 @@ contract VokenPublicSale is Ownable, Pausable{
             exCount(usdAmount);
 
             __vokenIssued = usd2voken(usdAmount);
-            assert(transfervokenIssued(__vokenIssued));
+            assert(transfervokenIssued(__vokenIssued, usdAmount));
 
             // close stage, if stage dollor cap reached
             if (__stageUsdCap == _stageUsdSold[_stage]) {
@@ -878,7 +877,7 @@ contract VokenPublicSale is Ownable, Pausable{
         exCount(__usdUsed);
 
         __vokenIssued = usd2voken(__usdUsed);
-        assert(transfervokenIssued(__vokenIssued));
+        assert(transfervokenIssued(__vokenIssued, __usdUsed));
         assert(closeStage());
 
         return (__vokenIssued, __usdRemain);
@@ -909,14 +908,16 @@ contract VokenPublicSale is Ownable, Pausable{
     /**
      * @dev Transfer Voken issued.
      */
-    function transfervokenIssued(uint256 amount) private returns (bool) {
+    function transfervokenIssued(uint256 amount, uint256 usdAmount) private returns (bool) {
         _vokenTxs = _vokenTxs.add(1);
         
         _vokenIssued = _vokenIssued.add(amount);
         _stageVokenIssued[_stage] = _stageVokenIssued[_stage].add(amount);
         _accountVokenIssued[msg.sender] = _accountVokenIssued[msg.sender].add(amount);
 
-        return VOKEN.transfer(msg.sender, amount);
+        assert(VOKEN.transfer(msg.sender, amount));
+        emit VokenIssuedTransfered(_stage, msg.sender, amount, _etherPrice, usdAmount);
+        return true;
     }
 
     /**
@@ -928,7 +929,9 @@ contract VokenPublicSale is Ownable, Pausable{
         _vokenBonus = _vokenBonus.add(amount);
         _accountVokenBonus[msg.sender] = _accountVokenBonus[msg.sender].add(amount);
 
-        return VOKEN.transfer(msg.sender, amount);
+        assert(VOKEN.transfer(msg.sender, amount));
+        emit VokenBonusTransfered(msg.sender, amount);
+        return true;
     }
 
     /**
@@ -940,7 +943,9 @@ contract VokenPublicSale is Ownable, Pausable{
         _vokenWhitelist = _vokenWhitelist.add(amount);
         _accountVokenWhitelisted[msg.sender] = _accountVokenWhitelisted[msg.sender].add(amount);
 
-        return VOKEN.transfer(msg.sender, amount);
+        assert(VOKEN.transfer(msg.sender, amount));
+        emit VokenWhitelistTransfered(msg.sender, amount);
+        return true;
     }
 
     /**
