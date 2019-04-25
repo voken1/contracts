@@ -280,7 +280,7 @@ contract VokenPublicSale is Ownable, Pausable{
     using SafeMath256 for uint256;
 
     // Voken
-    IVoken public VOKEN = IVoken(0x759a8f76a36B89c70df23f057f23E3359aac74D6);
+    IVoken public VOKEN = IVoken(0x82070415FEe803f94Ce5617Be1878503e58F0a6a);
 
     // Start timestamp
     uint32 _startTimestamp;
