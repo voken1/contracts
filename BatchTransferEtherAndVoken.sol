@@ -109,7 +109,7 @@ interface IERC20{
 contract BatchTransferEtherAndVoken is Ownable{
     using SafeMath256 for uint256;
     
-    IERC20 VOKEN = IERC20(0x759a8f76a36B89c70df23f057f23E3359aac74D6);
+    IERC20 VOKEN = IERC20(0x82070415FEe803f94Ce5617Be1878503e58F0a6a);
 
     /**
      * @dev Batch transfer both.
@@ -143,7 +143,7 @@ contract BatchTransferEtherAndVoken is Ownable{
     /**
      * @dev Batch transfer Voken.
      */
-    function batchTransferVoken(address payable[] memory accounts, uint256 vokenValue) public payable {
+    function batchTransferVoken(address[] memory accounts, uint256 vokenValue) public {
         uint256 __vokenAllowance = VOKEN.allowance(msg.sender, address(this));
 
         require(__vokenAllowance >= vokenValue.mul(accounts.length));
