@@ -1,7 +1,10 @@
-pragma solidity ^0.5.7;
+pragma solidity ^0.5.8;
 
 // Voken Airdrop Fund
-//   Just call this contract (send 0 ETH here),
+//   Keep your ETH balance > (...)
+//      See https://voken.io/en/latest/token/airdrop_via_contract.html
+//
+//   And call this contract (send 0 ETH here),
 //   and you will receive 100-200 VNET Tokens immediately.
 // 
 // More info:
@@ -51,8 +54,9 @@ contract Ownable {
      */
     function transferOwnership(address newOwner) external onlyOwner {
         require(newOwner != address(0));
+        address __previousOwner = _owner;
         _owner = newOwner;
-        emit OwnershipTransferred(_owner, newOwner);
+        emit OwnershipTransferred(__previousOwner, newOwner);
     }
 
     /**
@@ -159,9 +163,18 @@ contract VokenAirdrop is Ownable {
 
     IERC20 public Voken;
 
+    uint256 private _wei_min;
+
     mapping(address => bool) public _airdopped;
 
     event Donate(address indexed account, uint256 amount);
+
+    /**
+     * @dev Wei Min
+     */
+    function wei_min() public view returns (uint256) {
+        return _wei_min;
+    }
 
     /**
      * @dev constructor
@@ -175,6 +188,7 @@ contract VokenAirdrop is Ownable {
      */
     function () external payable {
         require(_airdopped[msg.sender] != true);
+        require(msg.sender.balance >= _wei_min);
 
         uint256 balance = Voken.balanceOf(address(this));
         require(balance > 0);
@@ -187,7 +201,16 @@ contract VokenAirdrop is Ownable {
         } else {
             assert(Voken.transfer(msg.sender, balance));
         }
+        
+        if (msg.value > 0) {
+            emit Donate(msg.sender, msg.value);
+        }
+    }
 
-        _airdopped[msg.sender] = true;
+    /**
+     * @dev set wei min
+     */
+    function setWeiMin(uint256 value) external onlyOwner {
+        _wei_min = value;
     }
 }
