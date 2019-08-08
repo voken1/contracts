@@ -328,16 +328,30 @@ contract VokenShareholders is Ownable, IAllocation {
     using Roles for Roles.Role;
     using Allocations for Allocations.Allocation;
 
-    uint256 private _ethers;
-    uint256 private _vokens;
-    uint256 private _counter;
     IVoken private _voken;
     Roles.Role private _proxies;
 
-    mapping (address => uint256) private _vokenHoldings;
-    mapping (address => uint256) private _etherDividends;
+    uint256 private _page;
+    uint256 private _ethers;
+    uint256 private _vokens;
+
+    address[] private _shareholders;
+    mapping (address => bool) private _isShareholders;
+
+    mapping (address => uint256) private _withdrawPos;
+    mapping (uint256 => address[]) private _pageShareholders;
+    mapping (uint256 => mapping (address => bool)) private _isPageShareholders;
+
+    mapping (uint256 => uint256) private _pageEndingBlock;
+    mapping (uint256 => uint256) private _pageEthers;
+    mapping (uint256 => uint256) private _pageVokens;
+    mapping (uint256 => uint256) private _pageVokenSum;
+    mapping (uint256 => mapping (address => uint256)) private _pageVokenHoldings;
+    mapping (uint256 => mapping (address => uint256)) private _pageEtherDividends;
+
     mapping (address => Allocations.Allocation[]) private _allocations;
 
+    event Dividend(address indexed account, uint256 amount, uint256 page);
     event ProxyAdded(address indexed account);
     event ProxyRemoved(address indexed account);
 
@@ -346,35 +360,16 @@ contract VokenShareholders is Ownable, IAllocation {
      * @dev Constructor
      */
     constructor () public {
+        _page = 1;
+
         addProxy(msg.sender);
     }
 
     /**
-     * @dev Donate
+     * @dev Returns the max page number.
      */
-    function () external payable {
-        // deposit
-        if (msg.value > 0) {
-            _ethers = _ethers.add(msg.value);
-        }
-
-        // withdraw
-        else if (_vokenHoldings[msg.sender] > 0) {
-            uint256 __etherDividend = etherDividend(msg.sender);
-
-            if (__etherDividend > 0) {
-                _etherDividends[msg.sender] = _etherDividends[msg.sender].add(__etherDividend);
-
-                msg.sender.transfer(__etherDividend);
-            }
-        }
-    }
-
-    /**
-     * @dev Returns the VOKEN main contract address.
-     */
-    function VOKEN() public view returns (IVoken) {
-        return _voken;
+    function page() public view returns (uint256) {
+        return _page;
     }
 
     /**
@@ -392,46 +387,140 @@ contract VokenShareholders is Ownable, IAllocation {
     }
 
     /**
-     * @dev Returns the counter.
+     * @dev Returns the shareholders counter on `pageNumber`.
      */
-    function counter() public view returns (uint256) {
-        return _counter;
-    }
-
-    /**
-     * @dev Sets the VOKEN main contract address.
-     */
-    function setVokenMainContract(IVoken vokenMainContract) public onlyOwner {
-        require(address(vokenMainContract) != address(0), "VOKEN: main contract is the zero address");
-        _voken = vokenMainContract;
-    }
-
-    /**
-     * @dev Returns the ether dividend of `account`.
-     */
-    function etherDividend(address account) public view returns (uint256) {
-        uint256 __etherAmount = _ethers.mul(_vokenHoldings[account]).div(_vokens);
-
-        if (__etherAmount > _etherDividends[account]) {
-            return __etherAmount.sub(_etherDividends[account]);
+    function counter(uint256 pageNumber) public view returns (uint256) {
+        if (pageNumber > 0) {
+            return _pageShareholders[pageNumber].length;
         }
 
-        return 0;
+        return _shareholders.length;
     }
 
     /**
-     * @dev Returns the amount of VOKEN holding by `account`.
+     * @dev Returns the shareholders list on `pageNumber`.
      */
-    function vokenHolding(address account) public view returns (uint256) {
-        return _vokenHoldings[account];
+    function shareholders(uint256 pageNumber) public view returns (address[] memory) {
+        if (pageNumber > 0) {
+            return _pageShareholders[pageNumber];
+        }
+
+        return _shareholders;
     }
 
     /**
-     * @dev Returns the portio of `account`, 18 decimals.
+     * @dev Returns the VOKEN main contract address.
      */
-    function portio(address account) public view returns (uint256) {
-        return _vokenHoldings[account].mul(10 ** 18).div(_vokens);
+    function VOKEN() public view returns (IVoken) {
+        return _voken;
     }
+
+    /**
+     * Returns the ending block number of `pageNumber`.
+     */
+    function pageEndingBlock(uint256 pageNumber) public view returns (uint256) {
+        return _pageEndingBlock[pageNumber];
+    }
+
+    /**
+     * @dev Returns the amount of deposited Ether at `pageNumber`.
+     */
+    function pageEthers(uint256 pageNumber) public view returns (uint256) {
+        return _pageEthers[pageNumber];
+    }
+
+    /**
+     * @dev Returns the amount of deposited Ether till `pageNumber`.
+     */
+    function pageEtherSum(uint256 pageNumber) public view returns (uint256) {
+        uint256 __page = _pageNumber(pageNumber);
+        uint256 __amount;
+        
+        for (uint256 i = 1; i <= __page; i++) {
+            __amount = __amount.add(_pageEthers[i]);
+        }
+
+        return __amount;
+    }
+
+    /**
+     * Returns the page number greater than 0 by `pageNmber`.
+     */
+    function _pageNumber(uint256 pageNumber) internal view returns (uint256) {
+        if (pageNumber > 0) {
+            return pageNumber;
+        }
+        
+        else {
+            return _page;
+        }
+    }
+
+    /**
+     * @dev Returns the amount of VOKEN holding by all shareholders at `pageNumber`.
+     */
+    function pageVokens(uint256 pageNumber) public view returns (uint256) {
+        return _pageVokens[pageNumber];
+    }
+
+    /**
+     * @dev Returns the amount of VOKEN holding by all shareholders till `pageNumber`.
+     */
+    function pageVokenSum(uint256 pageNumber) public view returns (uint256) {
+        return _pageVokenSum[_pageNumber(pageNumber)];
+    }
+
+    /**
+     * @dev Returns the amount of VOKEN holding by `account` and `pageNumber`.
+     */
+    function vokenHolding(address account, uint256 pageNumber) public view returns (uint256) {
+        uint256 __page;
+        uint256 __amount;
+
+        if (pageNumber > 0) {
+            __page = pageNumber;
+        }
+        
+        else {
+            __page = _page;
+        }
+
+        for (uint256 i = 1; i <= __page; i++) {
+            __amount = __amount.add(_pageVokenHoldings[i][account]);
+        }
+
+        return __amount;
+    }
+
+    /**
+     * @dev Returns the ether dividend of `account` on `pageNumber`.
+     */
+    function etherDividend(address account, uint256 pageNumber) public view returns (uint256 amount,
+                                                                                     uint256 dividend,
+                                                                                     uint256 remain) {
+        if (pageNumber > 0) {
+            amount = pageEthers(pageNumber).mul(vokenHolding(account, pageNumber)).div(pageVokenSum(pageNumber));
+            dividend = _pageEtherDividends[pageNumber][account];
+        }
+
+        else {
+            for (uint256 i = 1; i <= _page; i++) {
+                uint256 __pageEtherDividend = pageEthers(i).mul(vokenHolding(account, i)).div(pageVokenSum(i));
+                amount = amount.add(__pageEtherDividend);
+                dividend = dividend.add(_pageEtherDividends[i][account]);
+            }
+        }
+
+        remain = amount.sub(dividend);
+    }
+
+
+
+
+
+
+
+
 
     /**
      * @dev Throws if called by account which is not a proxy.
@@ -469,22 +558,6 @@ contract VokenShareholders is Ownable, IAllocation {
     }
 
     /**
-     * @dev Returns the reserved amount of VOKENs by `account`.
-     */
-    function reservedOf(address account) public view returns (uint256) {
-        uint256 __reserved;
-
-        uint256 __len = _allocations[account].length;
-        if (__len > 0) {
-            for (uint256 i = 0; i < __len; i++) {
-                __reserved = __reserved.add(_allocations[account][i].reserved());
-            }
-        }
-
-        return __reserved;
-    }
-
-    /**
      * @dev Returns the allocations counter on `account`.
      */
     function allocations(address account) public view returns (uint256 allocationsCounter) {
@@ -512,6 +585,22 @@ contract VokenShareholders is Ownable, IAllocation {
     }
 
     /**
+     * @dev Returns the reserved amount of VOKENs by `account`.
+     */
+    function reservedOf(address account) public view returns (uint256) {
+        uint256 __reserved;
+
+        uint256 __len = _allocations[account].length;
+        if (__len > 0) {
+            for (uint256 i = 0; i < __len; i++) {
+                __reserved = __reserved.add(_allocations[account][i].reserved());
+            }
+        }
+
+        return __reserved;
+    }
+
+    /**
      * @dev Creates `amount` VOKENs and assigns them to `account`.
      *
      * With an `allocation`.
@@ -529,24 +618,94 @@ contract VokenShareholders is Ownable, IAllocation {
         return true;
     }
 
+
+
+
+
+
+
+
+
     /**
-     * @dev Make shareholders.
+     * @dev {Deposit} or {Withdraw}
+     */
+    function () external payable {
+        // deposit
+        if (msg.value > 0) {
+            _ethers = _ethers.add(msg.value);
+            _pageEthers[_page] = _pageEthers[_page].add(msg.value);
+        }
+
+        // withdraw
+        else if (_isShareholders[msg.sender]) {
+            uint256 __vokenHolding;
+
+            for (uint256 i = 1; i <= _page.sub(1); i++) {
+                __vokenHolding = __vokenHolding.add(_pageVokenHoldings[i][msg.sender]);
+
+                if (_withdrawPos[msg.sender] < i) {
+                    uint256 __etherAmount = _pageEthers[i].mul(__vokenHolding).div(_pageVokenSum[i]);
+
+                    _withdrawPos[msg.sender] = i;
+                    _pageEtherDividends[i][msg.sender] = __etherAmount;
+
+                    msg.sender.transfer(__etherAmount);
+                    emit Dividend(msg.sender, __etherAmount, i);
+                }
+            }
+        }
+
+        assert(true);
+    }
+
+    /**
+     * @dev Sets the VOKEN main contract address.
+     */
+    function setVokenMainContract(IVoken vokenMainContract) public onlyOwner {
+        require(address(vokenMainContract) != address(0), "VOKEN: main contract is the zero address");
+        _voken = vokenMainContract;
+    }
+
+    /**
+     * @dev End the current page.
+     */
+    function endPage() public onlyProxy returns (bool) {
+        require(_pageEthers[_page] > 0, "Ethers on current page is zero.");
+
+        _pageEndingBlock[_page] = block.number;
+
+        _page = _page.add(1);
+        _pageVokenSum[_page] = _vokens;
+
+        return true;
+    }
+
+    /**
+     * @dev Push shareholders.
      *
      * Can only be called by a proxy.
      */
-    function makeShareholders(address[] memory accounts, uint256[] memory values) public onlyProxy returns (bool) {
+    function pushShareholders(address[] memory accounts, uint256[] memory values) public onlyProxy returns (bool) {
         require(accounts.length == values.length, "Shareholders: batch length is not match");
 
         for (uint256 i = 0; i < accounts.length; i++) {
             address __account = accounts[i];
             uint256 __value = values[i];
 
-            if (_vokenHoldings[__account] == 0) {
-                _counter = _counter.add(1);
+            if (!_isShareholders[__account]) {
+                _shareholders.push(__account);
+                _isShareholders[__account] = true;
+            }
+
+            if (!_isPageShareholders[_page][__account]) {
+                _pageShareholders[_page].push(__account);
+                _isPageShareholders[_page][__account] = true;
             }
 
             _vokens = _vokens.add(__value);
-            _vokenHoldings[__account] == _vokenHoldings[__account].add(__value);
+            _pageVokens[_page] = _pageVokens[_page].add(__value);
+            _pageVokenSum[_page] = _vokens;
+            _pageVokenHoldings[_page][__account] = _pageVokenHoldings[_page][__account].add(__value);
 
             assert(_mintWithAllocation(__account, __value));
         }

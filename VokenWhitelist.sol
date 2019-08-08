@@ -315,7 +315,9 @@ contract VokenWhitelist is Ownable {
     /**
      * @dev Constructor
      */
-    constructor () public {
+    constructor (IVoken vokenMainContract) public {
+        _voken = vokenMainContract;
+
         _allowSignUp = true;
         
         _referee[msg.sender] = msg.sender;
@@ -499,9 +501,11 @@ contract VokenWhitelist is Ownable {
         for(uint i = 0; i < _vokenRewardsArr.length; i++) {
             address __receiver = _referee[__cursor];
 
-            if (__cursor != __receiver && _referrals[__receiver].length > i) {
-                assert(_voken.transfer(__receiver, _vokenRewardsArr[i]));
-                __distributedAmount = __distributedAmount.add(_vokenRewardsArr[i]);
+            if (__receiver != address(0)) {
+                if (__receiver != __cursor && _referrals[__receiver].length > i) {
+                    assert(_voken.transfer(__receiver, _vokenRewardsArr[i]));
+                    __distributedAmount = __distributedAmount.add(_vokenRewardsArr[i]);
+                }
             }
 
             __cursor = _referee[__cursor];

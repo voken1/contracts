@@ -337,12 +337,13 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     using Roles for Roles.Role;
 
     string private _name = "New Vision.Network 100G Token";
-    string private _symbol = "Voken6";
+    string private _symbol = "Voken8";
     uint8 private _decimals = 6;                // 6 decimals
     uint256 private _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
     uint256 private _totalSupply;
     uint256 private _whitelistSignUpTriggerValue = 1001000000;  // 1001 VOKENs, sign-up for whitelist
     bool private _rejectNonWhitelistTransaction;
+
     Roles.Role private _minters;
     IWhitelist private _whitelist;
 
@@ -735,6 +736,8 @@ contract NewVoken is Ownable, Pausable, IERC20 {
 
         _whitelist = whitelistContract;
         _globalAddresses[address(_whitelist)] = true;
+        
+        addMinter(address(_whitelist));
     }
 
     /**
