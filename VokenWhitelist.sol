@@ -320,7 +320,7 @@ contract VokenWhitelist is Ownable {
         _voken = vokenMainContract;
 
         _allowSignUp = true;
-        
+
         _referee[msg.sender] = msg.sender;
         _counter = 1;
 
@@ -390,17 +390,17 @@ contract VokenWhitelist is Ownable {
     }
 
     /**
-     * @dev Returns the counter.
-     */
-    function counter() public view returns (uint256) {
-        return _counter;
-    }
-
-    /**
      * @dev Returns true if the sign-up is allowed.
      */
     function allowSignUp() public view returns (bool) {
         return _allowSignUp;
+    }
+
+    /**
+     * @dev Returns the counter.
+     */
+    function counter() public view returns (uint256) {
+        return _counter;
     }
 
     /**
@@ -426,13 +426,6 @@ contract VokenWhitelist is Ownable {
     }
 
     /**
-     * @dev Returns true if the `account` is whitelisted.
-     */
-    function whitelisted(address account) public view returns (bool) {
-        return _referee[account] != address(0);
-    }
-
-    /**
      * @dev Returns the referee of an `account`.
      */
     function referee(address account) public view returns (address) {
@@ -454,11 +447,30 @@ contract VokenWhitelist is Ownable {
     }
 
     /**
-     * @dev Batch.
+     * @dev Returns true if the `account` is whitelisted.
+     */
+    function whitelisted(address account) public view returns (bool) {
+        return _referee[account] != address(0);
+    }
+
+    /**
+     * @dev Sign-up
      *
      * Can only be called by a proxy.
      */
-    function batch(address[] memory accounts, address[] memory refereeAccounts) public onlyProxy returns (bool) {
+    function signUp(address account, address refereeAccount) public onlyProxy returns (bool) {
+        _whitelist(account, refereeAccount);
+
+        _distributeVokens(account);
+        return true;
+    }
+
+    /**
+     * @dev Push whitelist, batch.
+     *
+     * Can only be called by a proxy.
+     */
+    function pushWhitelist(address[] memory accounts, address[] memory refereeAccounts) public onlyProxy returns (bool) {
         require(accounts.length == refereeAccounts.length, "VOKEN Whitelist: batch length is not match");
 
         for (uint256 i = 0; i < accounts.length; i++) {
@@ -484,18 +496,6 @@ contract VokenWhitelist is Ownable {
         _counter = _counter.add(1);
 
         emit SignedUp(account, refereeAccount);
-    }
-
-    /**
-     * @dev Sign-up
-     *
-     * Can only be called by a proxy.
-     */
-    function signUp(address account, address refereeAccount) public onlyProxy returns (bool) {
-        _whitelist(account, refereeAccount);
-
-        _distributeVokens(account);
-        return true;
     }
 
     /**
