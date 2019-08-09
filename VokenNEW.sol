@@ -165,9 +165,10 @@ interface IAllocation {
  * @dev Interface of the whitelist contract.
  */
 interface IWhitelist {
+    function allowSignUp() external view returns (bool);
+    function vokenTrigger() external view returns (uint256);
     function whitelisted(address account) external view returns (bool);
     function signUp(address account, address refereeAccount) external returns (bool);
-    function allowSignUp() external view returns (bool);
 }
 
 
@@ -337,11 +338,11 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     using Roles for Roles.Role;
 
     string private _name = "New Vision.Network 100G Token";
-    string private _symbol = "Voken8";
+    string private _symbol = "VokenNEW";
     uint8 private _decimals = 6;                // 6 decimals
     uint256 private _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
     uint256 private _totalSupply;
-    uint256 private _whitelistSignUpTriggerValue = 1001000000;  // 1001 VOKENs, sign-up for whitelist
+    uint256 private _whitelistTrigger;
     bool private _rejectNonWhitelistTransaction;
 
     Roles.Role private _minters;
@@ -479,12 +480,12 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      */
     function transfer(address recipient, uint256 amount) public whenNotPaused returns (bool) {
         // Whitelist sign-up
-        if (amount == _whitelistSignUpTriggerValue
+        if (amount == _whitelistTrigger
             && _whitelist.allowSignUp()
             && _whitelist.whitelisted(recipient)
             && !_whitelist.whitelisted(msg.sender)
         ) {
-            _transfer(msg.sender, address(_whitelist), _whitelistSignUpTriggerValue);
+            _transfer(msg.sender, address(_whitelist), _whitelistTrigger);
             _whitelist.signUp(msg.sender, recipient);
         }
 
@@ -498,59 +499,6 @@ contract NewVoken is Ownable, Pausable, IERC20 {
             _transfer(msg.sender, recipient, _getAvailableAmount(msg.sender, amount));
         }
 
-        return true;
-    }
-
-    /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`.
-     *
-     * Can only be called by a minter.
-     */
-    function mint(address account, uint256 amount) public whenNotPaused onlyMinter returns (bool) {
-        _mint(account, amount);
-        return true;
-    }
-
-    /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`.
-     *
-     * With an `allocationContract`
-     *
-     * Can only be called by a minter.
-     */
-    function mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) public whenNotPaused onlyMinter returns (bool) {
-        _mintWithAllocation(account, amount, allocationContract);
-        return true;
-    }
-
-    /**
-     * @dev Destroys `amount` VOKENs from the caller.
-     *
-     * Emits a {Transfer} event with `to` set to the zero address.
-     */
-    function burn(uint256 amount) public whenNotPaused returns (bool) {
-        _burn(msg.sender, amount);
-        return true;
-    }
-
-    /**
-     * @dev Returns the remaining number of VOKENs that `spender` will be
-     * allowed to spend on behalf of `owner` through {transferFrom}.
-     * This is zero by default.
-     */
-    function allowance(address owner, address spender) public view returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    /**
-     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
-     *
-     * Returns a boolean value indicating whether the operation succeeded.
-     *
-     * Emits an {Approval} event.
-     */
-    function approve(address spender, uint256 value) public whenNotPaused returns (bool) {
-        _approve(msg.sender, spender, value);
         return true;
     }
 
@@ -582,6 +530,16 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
+     * @dev Destroys `amount` VOKENs from the caller.
+     *
+     * Emits a {Transfer} event with `to` set to the zero address.
+     */
+    function burn(uint256 amount) public whenNotPaused returns (bool) {
+        _burn(msg.sender, amount);
+        return true;
+    }
+
+    /**
      * @dev Destoys `amount` VOKENs from `account`.`amount` is then deducted
      * from the caller's allowance.
      *
@@ -593,6 +551,49 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     function burnFrom(address account, uint256 amount) public whenNotPaused returns (bool) {
         _burn(account, amount);
         _approve(account, msg.sender, _allowances[account][msg.sender].sub(amount, "VOKEN: burn amount exceeds allowance"));
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     *
+     * Can only be called by a minter.
+     */
+    function mint(address account, uint256 amount) public whenNotPaused onlyMinter returns (bool) {
+        _mint(account, amount);
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     *
+     * With an `allocationContract`
+     *
+     * Can only be called by a minter.
+     */
+    function mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) public whenNotPaused onlyMinter returns (bool) {
+        _mintWithAllocation(account, amount, allocationContract);
+        return true;
+    }
+
+    /**
+     * @dev Returns the remaining number of VOKENs that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}.
+     * This is zero by default.
+     */
+    function allowance(address owner, address spender) public view returns (uint256) {
+        return _allowances[owner][spender];
+    }
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits an {Approval} event.
+     */
+    function approve(address spender, uint256 value) public whenNotPaused returns (bool) {
+        _approve(msg.sender, spender, value);
         return true;
     }
 
@@ -735,8 +736,10 @@ contract NewVoken is Ownable, Pausable, IERC20 {
         require(address(whitelistContract) != address(0), "VOKEN: whitelist contract is the zero address");
 
         _whitelist = whitelistContract;
+        _whitelistTrigger = _whitelist.vokenTrigger();
+
         _globalAddresses[address(_whitelist)] = true;
-        
+
         addMinter(address(_whitelist));
     }
 

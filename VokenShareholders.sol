@@ -435,7 +435,7 @@ contract VokenShareholders is Ownable, IAllocation {
     function pageEtherSum(uint256 pageNumber) public view returns (uint256) {
         uint256 __page = _pageNumber(pageNumber);
         uint256 __amount;
-        
+
         for (uint256 i = 1; i <= __page; i++) {
             __amount = __amount.add(_pageEthers[i]);
         }
@@ -450,7 +450,7 @@ contract VokenShareholders is Ownable, IAllocation {
         if (pageNumber > 0) {
             return pageNumber;
         }
-        
+
         else {
             return _page;
         }
@@ -480,7 +480,7 @@ contract VokenShareholders is Ownable, IAllocation {
         if (pageNumber > 0) {
             __page = pageNumber;
         }
-        
+
         else {
             __page = _page;
         }

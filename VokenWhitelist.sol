@@ -279,8 +279,9 @@ contract VokenWhitelist is Ownable {
 
     bool private _allowSignUp;
     uint256 private _counter;
-    uint256 private _vokenRefund = 1000000;     // 1 VOKEN for success signal
-    uint256 private _vokenRewards = 1000000000; // 1000 VOKENs for rewards
+    uint256 private _vokenTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
+    uint256 private _vokenRefund = 1000000;         //    1 VOKEN  for success signal
+    uint256 private _vokenRewards = 1000000000;     // 1000 VOKENs for rewards
     uint256[15] private _vokenRewardsArr = [
         300000000,  // 300 Voken for Level.1
         200000000,  // 200 Voken for Level.2
@@ -400,6 +401,13 @@ contract VokenWhitelist is Ownable {
      */
     function allowSignUp() public view returns (bool) {
         return _allowSignUp;
+    }
+
+    /**
+     * @dev Returns trigger value for sign-up when {transfer} by main contract.
+     */
+    function vokenTrigger() public view returns (uint256) {
+        return _vokenTrigger;
     }
 
     /**
