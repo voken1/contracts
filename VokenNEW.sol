@@ -162,17 +162,6 @@ interface IAllocation {
 
 
 /**
- * @dev Interface of the whitelist contract.
- */
-interface IWhitelist {
-    function allowSignUp() external view returns (bool);
-    function vokenTrigger() external view returns (uint256);
-    function whitelisted(address account) external view returns (bool);
-    function signUp(address account, address refereeAccount) external returns (bool);
-}
-
-
-/**
  * @dev Contract module which provides a basic access control mechanism, where
  * there is an account (an owner) that can be granted exclusive access to
  * specific functions.
@@ -338,37 +327,78 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     using Roles for Roles.Role;
 
     string private _name = "New Vision.Network 100G Token";
-    string private _symbol = "VokenNEW";
+    string private _symbol = "Voken10";
     uint8 private _decimals = 6;                // 6 decimals
     uint256 private _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
     uint256 private _totalSupply;
-    uint256 private _whitelistTrigger;
-    bool private _rejectNonWhitelistTransaction;
 
+    bool private _safeMode;
+    bool private _whitelistingMode;
+    uint256 private _whitelistCounter;
+    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
+    uint256 private _whitelistRefund = 1000000;         //    1 VOKEN  for success signal
+    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKENs for rewards
+    uint256[15] private _whitelistRewardsArr = [
+        300000000,  // 300 Voken for Level.1
+        200000000,  // 200 Voken for Level.2
+        100000000,  // 100 Voken for Level.3
+        100000000,  // 100 Voken for Level.4
+        100000000,  // 100 Voken for Level.5
+        50000000,   //  50 Voken for Level.6
+        40000000,   //  40 Voken for Level.7
+        30000000,   //  30 Voken for Level.8
+        20000000,   //  20 Voken for Level.9
+        10000000,   //  10 Voken for Level.10
+        10000000,   //  10 Voken for Level.11
+        10000000,   //  10 Voken for Level.12
+        10000000,   //  10 Voken for Level.13
+        10000000,   //  10 Voken for Level.14
+        10000000    //  10 Voken for Level.15
+    ];
+
+    Roles.Role private _globals;
+    Roles.Role private _proxies;
     Roles.Role private _minters;
-    IWhitelist private _whitelist;
 
     mapping (address => uint256) private _balances;
     mapping (address => mapping (address => uint256)) private _allowances;
-    mapping (address => bool) private _globalAddresses;
     mapping (address => IAllocation[]) private _allocations;
     mapping (address => mapping (address => bool)) private _addressAllocations;
 
+    mapping (address => address) private _referee;
+    mapping (address => address[]) private _referrals;
+
     event Donate(address indexed account, uint256 amount);
     event Burn(address indexed account, uint256 amount);
+    event ProxyAdded(address indexed account);
+    event ProxyRemoved(address indexed account);
+    event GlobalAdded(address indexed account);
+    event GlobalRemoved(address indexed account);
     event MinterAdded(address indexed account);
     event MinterRemoved(address indexed account);
     event Mint(address indexed account, uint256 amount);
     event MintWithAllocation(address indexed account, uint256 amount, IAllocation indexed allocationContract);
+    event WhitelistSignUpEnabled();
+    event WhitelistSignUpDisabled();
+    event WhitelistSignUp(address indexed account, address indexed refereeAccount);
 
 
     /**
      * @dev Constructor
      */
     constructor () public {
-        _rejectNonWhitelistTransaction = true;
+        _whitelistingMode = true;
+        _safeMode = true;
 
+        _referee[msg.sender] = msg.sender;
+        _whitelistCounter = 1;
+
+        addGlobal(address(this));
+        addProxy(msg.sender);
         addMinter(msg.sender);
+
+        emit WhitelistSignUpEnabled();
+        emit WhitelistSignUp(msg.sender, msg.sender);
     }
 
     /**
@@ -480,13 +510,10 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      */
     function transfer(address recipient, uint256 amount) public whenNotPaused returns (bool) {
         // Whitelist sign-up
-        if (amount == _whitelistTrigger
-            && _whitelist.allowSignUp()
-            && _whitelist.whitelisted(recipient)
-            && !_whitelist.whitelisted(msg.sender)
-        ) {
-            _transfer(msg.sender, address(_whitelist), _whitelistTrigger);
-            _whitelist.signUp(msg.sender, recipient);
+        if (amount == _whitelistTrigger && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
+            _transfer(msg.sender, address(this), _whitelistTrigger);
+            _whitelist(msg.sender, recipient);
+            _distributeVokens(msg.sender);
         }
 
         // Burn
@@ -514,7 +541,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      */
     function transferFrom(address sender, address recipient, uint256 amount) public whenNotPaused returns (bool) {
         // Burn
-        if (recipient == address(0) || recipient == address(this)) {
+        if (recipient == address(this) || recipient == address(0)) {
             _burn(msg.sender, amount);
         }
 
@@ -627,8 +654,8 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     function _transfer(address sender, address recipient, uint256 amount) internal {
         require(recipient != address(0), "VOKEN: recipient is the zero address");
 
-        if (_rejectNonWhitelistTransaction && !_globalAddresses[sender] && !_globalAddresses[recipient]) {
-            require(_whitelist.whitelisted(sender), "VOKEN: sender is not whitelisted");
+        if (_safeMode && !isGlobal(sender) && !isGlobal(recipient)) {
+            require(whitelisted(sender), "VOKEN: sender is not whitelisted");
         }
 
         _balances[sender] = _balances[sender].sub(amount);
@@ -704,6 +731,14 @@ contract NewVoken is Ownable, Pausable, IERC20 {
         emit Approval(owner, spender, value);
     }
 
+
+
+
+
+
+
+
+
     /**
      * @dev Sets the full name of VOKEN.
      *
@@ -723,31 +758,139 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Returns the VOKEN whitelist contract address.
+     * @dev Returns true if the sign-up for whitelist is allowed.
      */
-    function whitelist() public view returns (IWhitelist) {
-        return _whitelist;
+    function whitelistingMode() public view returns (bool) {
+        return _whitelistingMode;
     }
 
     /**
-     * @dev Sets the whitelist contract address.
+     * @dev Returns the whitelist counter.
      */
-    function setWhitelistContract(IWhitelist whitelistContract) public onlyOwner {
-        require(address(whitelistContract) != address(0), "VOKEN: whitelist contract is the zero address");
-
-        _whitelist = whitelistContract;
-        _whitelistTrigger = _whitelist.vokenTrigger();
-
-        _globalAddresses[address(_whitelist)] = true;
-
-        addMinter(address(_whitelist));
+    function whitelistCounter() public view returns (uint256) {
+        return _whitelistCounter;
     }
 
     /**
-     * @dev Returns true if non-whitelist transaction is not allowed.
+     * @dev Returns the referee of an `account`.
      */
-    function rejectNonWhitelistTransaction() public view returns (bool) {
-        return _rejectNonWhitelistTransaction;
+    function whitelistReferee(address account) public view returns (address) {
+        return _referee[account];
+    }
+
+    /**
+     * @dev Returns referrals of a `account`
+     */
+    function whitelistReferrals(address account) public view returns (address[] memory) {
+        return _referrals[account];
+    }
+
+    /**
+     * @dev Returns the referrals count of an `account`.
+     */
+    function whitelistReferralsCount(address account) public view returns (uint256) {
+        return _referrals[account].length;
+    }
+
+    /**
+     * @dev Returns true if the `account` is whitelisted.
+     */
+    function whitelisted(address account) public view returns (bool) {
+        return _referee[account] != address(0);
+    }
+
+    /**
+     * @dev Push whitelist, batch.
+     *
+     * Can only be called by a proxy.
+     */
+    function pushWhitelist(address[] memory accounts, address[] memory refereeAccounts) public onlyProxy returns (bool) {
+        require(accounts.length == refereeAccounts.length, "VOKEN Whitelist: batch length is not match");
+
+        for (uint256 i = 0; i < accounts.length; i++) {
+            if (accounts[i] != address(0) && !whitelisted(accounts[i]) && whitelisted(refereeAccounts[i])) {
+                _whitelist(accounts[i], refereeAccounts[i]);
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Whitelist an `account` with a `refereeAccount`.
+     *
+     * Emits {WhitelistSignUp} event.
+     */
+    function _whitelist(address account, address refereeAccount) internal {
+        require(!whitelisted(account), "Whitelist: account is already whitelisted");
+        require(whitelisted(refereeAccount), "Whitelist: refereeAccount is not whitelisted");
+
+        _referee[account] = refereeAccount;
+        _referrals[refereeAccount].push(account);
+        _whitelistCounter = _whitelistCounter.add(1);
+
+        emit WhitelistSignUp(account, refereeAccount);
+    }
+
+    /**
+     * @dev Distribute VOKENs.
+     */
+    function _distributeVokens(address account) internal {
+        uint256 __distributedAmount;
+        uint256 __burnAmount;
+
+        address __cursor = account;
+        for(uint i = 0; i < _whitelistRewardsArr.length; i++) {
+            address __receiver = _referee[__cursor];
+
+            if (__receiver != address(0)) {
+                if (__receiver != __cursor && _referrals[__receiver].length > i) {
+                    _transfer(address(this), __receiver, _whitelistRewardsArr[i]);
+                    __distributedAmount = __distributedAmount.add(_whitelistRewardsArr[i]);
+                }
+            }
+
+            __cursor = _referee[__cursor];
+        }
+
+        // Burn
+        __burnAmount = _whitelistRewards.sub(__distributedAmount);
+        if (__burnAmount > 0) {
+            _burn(address(this), __burnAmount);
+        }
+
+        // Transfer VOKEN refund as a success signal.
+        _transfer(address(this), account, _whitelistRefund);
+    }
+
+
+
+
+
+
+
+
+
+    /**
+     * @dev Enable/disable sign-up for whitelist.
+     *
+     * Can only be called by the current owner.
+     */
+    function setWhitelistingMode(bool value) public onlyOwner {
+        _whitelistingMode = value;
+
+        if (_whitelistingMode) {
+            emit WhitelistSignUpEnabled();
+        } else {
+            emit WhitelistSignUpDisabled();
+        }
+    }
+
+    /**
+     * @dev Returns true if a transaction from non-whitelisted address is not allowed.
+     */
+    function safeMode() public view returns (bool) {
+        return _safeMode;
     }
 
     /**
@@ -755,24 +898,70 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      *
      * Can only be called by the current owner.
      */
-    function setRejectNonWhitelistTransactionState(bool value) public onlyOwner {
-        _rejectNonWhitelistTransaction = value;
+    function setSafeMode(bool value) public onlyOwner {
+        _safeMode = value;
     }
 
     /**
-     * @dev Returns true if the `account` is global.
+     * @dev Returns true if the `account` has the Global role
      */
     function isGlobal(address account) public view returns (bool) {
-        return _globalAddresses[account];
+        return _globals.has(account);
     }
 
     /**
-     * @dev Set `account` global state to `value`.
+     * @dev Give an `account` access to the Global role.
      *
      * Can only be called by the current owner.
      */
-    function setGlobal(address account, bool value) external onlyOwner {
-        _globalAddresses[account] = value;
+    function addGlobal(address account) public onlyOwner {
+        _globals.add(account);
+        emit GlobalAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Global role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeGlobal(address account) public onlyOwner {
+        _globals.remove(account);
+        emit GlobalRemoved(account);
+    }
+
+    /**
+     * @dev Throws if called by account which is not a proxy.
+     */
+    modifier onlyProxy() {
+        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
+        _;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Proxy role.
+     */
+    function isProxy(address account) public view returns (bool) {
+        return _proxies.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addProxy(address account) public onlyOwner {
+        _proxies.add(account);
+        emit ProxyAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeProxy(address account) public onlyOwner {
+        _proxies.remove(account);
+        emit ProxyRemoved(account);
     }
 
     /**
@@ -810,3 +999,4 @@ contract NewVoken is Ownable, Pausable, IERC20 {
         emit MinterRemoved(account);
     }
 }
+

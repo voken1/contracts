@@ -277,12 +277,12 @@ contract VokenWhitelist is Ownable {
     using SafeMath256 for uint256;
     using Roles for Roles.Role;
 
-    bool private _allowSignUp;
-    uint256 private _counter;
-    uint256 private _vokenTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
-    uint256 private _vokenRefund = 1000000;         //    1 VOKEN  for success signal
-    uint256 private _vokenRewards = 1000000000;     // 1000 VOKENs for rewards
-    uint256[15] private _vokenRewardsArr = [
+    bool private _allowWhitelistSignUp;
+    uint256 private _whitelistCounter;
+    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
+    uint256 private _whitelistRefund = 1000000;         //    1 VOKEN  for success signal
+    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKENs for rewards
+    uint256[15] private _whitelistRewardsArr = [
         300000000,  // 300 Voken for Level.1
         200000000,  // 200 Voken for Level.2
         100000000,  // 100 Voken for Level.3
@@ -309,9 +309,9 @@ contract VokenWhitelist is Ownable {
     event Donate(address indexed account, uint256 amount);
     event ProxyAdded(address indexed account);
     event ProxyRemoved(address indexed account);
-    event SignUpEnabled();
-    event SignUpDisabled();
-    event SignedUp(address indexed account, address indexed refereeAccount);
+    event WhitelistSignUpEnabled();
+    event WhitelistSignUpDisabled();
+    event WhitelistSignUp(address indexed account, address indexed refereeAccount);
 
     /**
      * @dev Constructor
@@ -319,13 +319,13 @@ contract VokenWhitelist is Ownable {
     constructor (IVoken vokenMainContract) public {
         _voken = vokenMainContract;
 
-        _allowSignUp = true;
+        _allowWhitelistSignUp = true;
 
         _referee[msg.sender] = msg.sender;
-        _counter = 1;
+        _whitelistCounter = 1;
 
-        emit SignUpEnabled();
-        emit SignedUp(msg.sender, msg.sender);
+        emit WhitelistSignUpEnabled();
+        emit WhitelistSignUp(msg.sender, msg.sender);
 
         addProxy(msg.sender);
     }
@@ -393,21 +393,21 @@ contract VokenWhitelist is Ownable {
      * @dev Returns true if the sign-up is allowed.
      */
     function allowSignUp() public view returns (bool) {
-        return _allowSignUp;
+        return _allowWhitelistSignUp;
     }
 
     /**
      * @dev Returns the counter.
      */
     function counter() public view returns (uint256) {
-        return _counter;
+        return _whitelistCounter;
     }
 
     /**
      * @dev Returns trigger value for sign-up when {transfer} by main contract.
      */
-    function vokenTrigger() public view returns (uint256) {
-        return _vokenTrigger;
+    function whitelistTrigger() public view returns (uint256) {
+        return _whitelistTrigger;
     }
 
     /**
@@ -416,12 +416,12 @@ contract VokenWhitelist is Ownable {
      * Can only be called by the current owner.
      */
     function setSignUpState(bool value) public onlyOwner {
-        _allowSignUp = value;
+        _allowWhitelistSignUp = value;
 
-        if (_allowSignUp) {
-            emit SignUpEnabled();
+        if (_allowWhitelistSignUp) {
+            emit WhitelistSignUpEnabled();
         } else {
-            emit SignUpDisabled();
+            emit WhitelistSignUpDisabled();
         }
     }
 
@@ -485,7 +485,7 @@ contract VokenWhitelist is Ownable {
     /**
      * @dev Whitelist an `account` with a `refereeAccount`.
      *
-     * Emits {SignedUp} event.
+     * Emits {WhitelistSignUp} event.
      */
     function _whitelist(address account, address refereeAccount) internal {
         require(!whitelisted(account), "VOKEN Whitelist: account is already whitelisted");
@@ -493,9 +493,9 @@ contract VokenWhitelist is Ownable {
 
         _referee[account] = refereeAccount;
         _referrals[refereeAccount].push(account);
-        _counter = _counter.add(1);
+        _whitelistCounter = _whitelistCounter.add(1);
 
-        emit SignedUp(account, refereeAccount);
+        emit WhitelistSignUp(account, refereeAccount);
     }
 
     /**
@@ -506,13 +506,13 @@ contract VokenWhitelist is Ownable {
         uint256 __burnAmount;
 
         address __cursor = account;
-        for(uint i = 0; i < _vokenRewardsArr.length; i++) {
+        for(uint i = 0; i < _whitelistRewardsArr.length; i++) {
             address __receiver = _referee[__cursor];
 
             if (__receiver != address(0)) {
                 if (__receiver != __cursor && _referrals[__receiver].length > i) {
-                    assert(_voken.transfer(__receiver, _vokenRewardsArr[i]));
-                    __distributedAmount = __distributedAmount.add(_vokenRewardsArr[i]);
+                    assert(_voken.transfer(__receiver, _whitelistRewardsArr[i]));
+                    __distributedAmount = __distributedAmount.add(_whitelistRewardsArr[i]);
                 }
             }
 
@@ -520,12 +520,12 @@ contract VokenWhitelist is Ownable {
         }
 
         // Burn
-        __burnAmount = _vokenRewards.sub(__distributedAmount);
+        __burnAmount = _whitelistRewards.sub(__distributedAmount);
         if (__burnAmount > 0) {
             _voken.burn(__burnAmount);
         }
 
         // Transfer VOKEN refund as a success signal.
-        assert(_voken.transfer(account, _vokenRefund));
+        assert(_voken.transfer(account, _whitelistRefund));
     }
 }
