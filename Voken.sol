@@ -144,9 +144,9 @@ interface IERC20 {
     function totalSupply() external view returns (uint256);
     function balanceOf(address account) external view returns (uint256);
     function transfer(address recipient, uint256 amount) external returns (bool);
-    function allowance(address owner, address spender) external view returns (uint256);
-    function approve(address spender, uint256 amount) external returns (bool);
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function allowance(address owner, address spender) external view returns (uint256);
 
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
@@ -328,16 +328,16 @@ contract NewVoken is Ownable, Pausable, IERC20 {
 
     string private _name = "New Vision.Network 100G Token";
     string private _symbol = "Voken10";
-    uint8 private _decimals = 6;                // 6 decimals
-    uint256 private _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
+    uint8 private _decimals = 6;
+    uint256 private _cap;
     uint256 private _totalSupply;
 
     bool private _safeMode;
     bool private _whitelistingMode;
     uint256 private _whitelistCounter;
-    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
+    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKEN for sign-up trigger
     uint256 private _whitelistRefund = 1000000;         //    1 VOKEN  for success signal
-    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKENs for rewards
+    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKEN for rewards
     uint256[15] private _whitelistRewardsArr = [
         300000000,  // 300 Voken for Level.1
         200000000,  // 200 Voken for Level.2
@@ -387,6 +387,8 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      * @dev Constructor
      */
     constructor () public {
+        _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
+
         _whitelistingMode = true;
         _safeMode = true;
 
@@ -446,14 +448,14 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Returns the amount of VOKENs owned by `account`.
+     * @dev Returns the amount of VOKEN owned by `account`.
      */
     function balanceOf(address account) public view returns (uint256) {
         return _balances[account];
     }
 
     /**
-     * @dev Returns the reserved amount of VOKENs by `account`.
+     * @dev Returns the reserved amount of VOKEN by `account`.
      */
     function reservedOf(address account) public view returns (uint256) {
         uint256 __reserved;
@@ -469,14 +471,14 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Returns the available amount of VOKENs by `account`.
+     * @dev Returns the available amount of VOKEN by `account`.
      */
     function availableOf(address account) public view returns (uint256) {
         return balanceOf(account).sub(reservedOf(account));
     }
 
     /**
-     * @dev Returns the available amount of VOKENs by `account` and a certain `amount`.
+     * @dev Returns the available amount of VOKEN by `account` and a certain `amount`.
      */
     function _getAvailableAmount(address account, uint256 amount) internal view returns (uint256) {
         uint256 __available = balanceOf(account).sub(reservedOf(account));
@@ -500,7 +502,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Moves `amount` VOKENs from the caller's account to `recipient`.
+     * @dev Moves `amount` VOKEN from the caller's account to `recipient`.
      *
      * Auto handle whitelist sign-up when `amount` is a specific value.
      *
@@ -513,7 +515,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
         if (amount == _whitelistTrigger && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
             _transfer(msg.sender, address(this), _whitelistTrigger);
             _whitelist(msg.sender, recipient);
-            _distributeVokens(msg.sender);
+            _distributeVokenForWhitelist(msg.sender);
         }
 
         // Burn
@@ -530,7 +532,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Moves `amount` VOKENs from `sender` to `recipient` using the
+     * @dev Moves `amount` VOKEN from `sender` to `recipient` using the
      * allowance mechanism. `amount` is then deducted from the caller's
      * allowance.
      *
@@ -557,7 +559,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Destroys `amount` VOKENs from the caller.
+     * @dev Destroys `amount` VOKEN from the caller.
      *
      * Emits a {Transfer} event with `to` set to the zero address.
      */
@@ -567,7 +569,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Destoys `amount` VOKENs from `account`.`amount` is then deducted
+     * @dev Destoys `amount` VOKEN from `account`.`amount` is then deducted
      * from the caller's allowance.
      *
      * Returns a boolean value indicating whether the operation succeeded.
@@ -582,7 +584,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     * @dev Creates `amount` VOKEN and assigns them to `account`.
      *
      * Can only be called by a minter.
      */
@@ -592,7 +594,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     * @dev Creates `amount` VOKEN and assigns them to `account`.
      *
      * With an `allocationContract`
      *
@@ -601,15 +603,6 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     function mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) public whenNotPaused onlyMinter returns (bool) {
         _mintWithAllocation(account, amount, allocationContract);
         return true;
-    }
-
-    /**
-     * @dev Returns the remaining number of VOKENs that `spender` will be
-     * allowed to spend on behalf of `owner` through {transferFrom}.
-     * This is zero by default.
-     */
-    function allowance(address owner, address spender) public view returns (uint256) {
-        return _allowances[owner][spender];
     }
 
     /**
@@ -622,6 +615,15 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     function approve(address spender, uint256 value) public whenNotPaused returns (bool) {
         _approve(msg.sender, spender, value);
         return true;
+    }
+
+    /**
+     * @dev Returns the remaining number of VOKEN that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}.
+     * This is zero by default.
+     */
+    function allowance(address owner, address spender) public view returns (uint256) {
+        return _allowances[owner][spender];
     }
 
     /**
@@ -645,7 +647,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Moves VOKENs `amount` from `sender` to `recipient`.
+     * @dev Moves VOKEN `amount` from `sender` to `recipient`.
      *
      * May reject non-whitelist transaction.
      *
@@ -664,7 +666,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`, increasing the total supply.
+     * @dev Creates `amount` VOKEN and assigns them to `account`, increasing the total supply.
      *
      * Emits a {Mint} event.
      * Emits a {Transfer} event with `from` set to the zero address.
@@ -680,7 +682,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Creates `amount` VOKENs and assigns them to `account`, increasing the total supply.
+     * @dev Creates `amount` VOKEN and assigns them to `account`, increasing the total supply.
      *
      * With an `allocationContract`
      *
@@ -703,7 +705,7 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Destroys `amount` VOKENs from `account`, reducing the total supply.
+     * @dev Destroys `amount` VOKEN from `account`, reducing the total supply.
      *
      * Emits a {Burn} event.
      * Emits a {Transfer} event with `to` set to the zero address.
@@ -713,12 +715,13 @@ contract NewVoken is Ownable, Pausable, IERC20 {
 
         _balances[account] = _balances[account].sub(__amount, "VOKEN: burn amount exceeds balance");
         _totalSupply = _totalSupply.sub(__amount);
+        _cap = _cap.sub(__amount);
         emit Burn(account, __amount);
         emit Transfer(account, address(0), __amount);
     }
 
     /**
-     * @dev Sets `amount` as the allowance of `spender` over the `owner`s VOKENs.
+     * @dev Sets `amount` as the allowance of `spender` over the `owner`s VOKEN.
      *
      * Emits an {Approval} event.
      */
@@ -758,10 +761,10 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Returns true if the sign-up for whitelist is allowed.
+     * @dev Returns true if the `account` is whitelisted.
      */
-    function whitelistingMode() public view returns (bool) {
-        return _whitelistingMode;
+    function whitelisted(address account) public view returns (bool) {
+        return _referee[account] != address(0);
     }
 
     /**
@@ -769,6 +772,13 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      */
     function whitelistCounter() public view returns (uint256) {
         return _whitelistCounter;
+    }
+
+    /**
+     * @dev Returns true if the sign-up for whitelist is allowed.
+     */
+    function whitelistingMode() public view returns (bool) {
+        return _whitelistingMode;
     }
 
     /**
@@ -790,13 +800,6 @@ contract NewVoken is Ownable, Pausable, IERC20 {
      */
     function whitelistReferralsCount(address account) public view returns (uint256) {
         return _referrals[account].length;
-    }
-
-    /**
-     * @dev Returns true if the `account` is whitelisted.
-     */
-    function whitelisted(address account) public view returns (bool) {
-        return _referee[account] != address(0);
     }
 
     /**
@@ -833,9 +836,9 @@ contract NewVoken is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Distribute VOKENs.
+     * @dev Distribute VOKEN.
      */
-    function _distributeVokens(address account) internal {
+    function _distributeVokenForWhitelist(address account) internal {
         uint256 __distributedAmount;
         uint256 __burnAmount;
 
