@@ -1,8 +1,9 @@
-pragma solidity ^0.5.7;
+pragma solidity ^0.5.10;
 
-
-// Vision.Network 100G Token -- is called "Voken" (upgraded)
-// 
+// New Vision.Network 100G Token
+//
+// Upgraded in Aug 2019
+//
 // More info:
 //   https://vision.network
 //   https://voken.io
@@ -13,91 +14,168 @@ pragma solidity ^0.5.7;
 
 
 /**
- * @title SafeMath
- * @dev Unsigned math operations with safety checks that revert on error.
+ * @dev Wrappers over Solidity's arithmetic operations with added overflow checks.
  */
-library SafeMath {
+library SafeMath256 {
     /**
-     * @dev Adds two unsigned integers, reverts on overflow.
+     * @dev Returns the addition of two unsigned integers, reverting on overflow.
      */
-    function add(uint256 a, uint256 b) internal pure returns (uint256 c) {
-        c = a + b;
-        assert(c >= a);
+    function add(uint256 a, uint256 b) internal pure returns (uint256) {
+        uint256 c = a + b;
+        require(c >= a, "SafeMath: addition overflow");
+
         return c;
     }
 
     /**
-     * @dev Subtracts two unsigned integers, reverts on overflow (i.e. if subtrahend is greater than minuend).
+     * @dev Returns the subtraction of two unsigned integers, reverting on
+     * overflow (when the result is negative).
      */
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
-        assert(b <= a);
-        return a - b;
+        return sub(a, b, "SafeMath: subtraction overflow");
     }
 
     /**
-     * @dev Multiplies two unsigned integers, reverts on overflow.
+     * @dev Returns the subtraction of two unsigned integers, reverting with custom message on
+     * overflow (when the result is negative).
      */
-    function mul(uint256 a, uint256 b) internal pure returns (uint256 c) {
+    function sub(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        require(b <= a, errorMessage);
+        uint256 c = a - b;
+
+        return c;
+    }
+
+    /**
+     * @dev Returns the multiplication of two unsigned integers, reverting on overflow.
+     */
+    function mul(uint256 a, uint256 b) internal pure returns (uint256) {
         if (a == 0) {
             return 0;
         }
-        c = a * b;
-        assert(c / a == b);
+
+        uint256 c = a * b;
+        require(c / a == b, "SafeMath: multiplication overflow");
+
         return c;
     }
 
     /**
-     * @dev Integer division of two unsigned integers truncating the quotient,
-     * reverts on division by zero.
+     * @dev Returns the integer division of two unsigned integers. Reverts on
+     * division by zero. The result is rounded towards zero.
      */
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
-        assert(b > 0);
-        uint256 c = a / b;
-        assert(a == b * c + a % b);
+        return div(a, b, "SafeMath: division by zero");
+    }
+
+    /**
+     * @dev Returns the integer division of two unsigned integers. Reverts with custom message on
+     * division by zero. The result is rounded towards zero.
+     */
+    function div(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        // Solidity only automatically asserts when dividing by 0
+        require(b > 0, errorMessage);
         return a / b;
     }
 
     /**
-     * @dev Divides two unsigned integers and returns the remainder (unsigned integer modulo),
-     * reverts when dividing by zero.
+     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
+     * Reverts when dividing by zero.
      */
     function mod(uint256 a, uint256 b) internal pure returns (uint256) {
-        require(b != 0);
+        return mod(a, b, "SafeMath: modulo by zero");
+    }
+
+    /**
+     * @dev Returns the remainder of dividing two unsigned integers. (unsigned integer modulo),
+     * Reverts with custom message when dividing by zero.
+     */
+    function mod(uint256 a, uint256 b, string memory errorMessage) internal pure returns (uint256) {
+        require(b != 0, errorMessage);
         return a % b;
     }
 }
 
 
 /**
- * @title ERC20 interface
- * @dev see https://eips.ethereum.org/EIPS/eip-20
+ * @dev Library for managing addresses assigned to a Role.
  */
-interface IERC20{
+library Roles {
+    struct Role {
+        mapping (address => bool) bearer;
+    }
+
+    /**
+     * @dev Give an account access to this role.
+     */
+    function add(Role storage role, address account) internal {
+        require(!has(role, account), "Roles: account already has role");
+        role.bearer[account] = true;
+    }
+
+    /**
+     * @dev Remove an account's access to this role.
+     */
+    function remove(Role storage role, address account) internal {
+        require(has(role, account), "Roles: account does not have role");
+        role.bearer[account] = false;
+    }
+
+    /**
+     * @dev Check if an account has this role.
+     *
+     * @return bool
+     */
+    function has(Role storage role, address account) internal view returns (bool) {
+        require(account != address(0), "Roles: account is the zero address");
+        return role.bearer[account];
+    }
+}
+
+
+/**
+ * @dev Interface of the ERC20 standard
+ */
+interface IERC20 {
     function name() external view returns (string memory);
     function symbol() external view returns (string memory);
     function decimals() external view returns (uint8);
+
     function totalSupply() external view returns (uint256);
-    function balanceOf(address owner) external view returns (uint256);
-    function transfer(address to, uint256 value) external returns (bool);
-    function transferFrom(address from, address to, uint256 value) external returns (bool);
-    function approve(address spender, uint256 value) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address recipient, uint256 amount) external returns (bool);
     function allowance(address owner, address spender) external view returns (uint256);
+    function approve(address spender, uint256 amount) external returns (bool);
+    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
+
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
 
 /**
- * @title Ownable
+ * @dev Interface of an allocation contract.
+ */
+interface IAllocation {
+    function reservedOf(address account) external view returns (uint256);
+}
+
+
+/**
+ * @dev Contract module which provides a basic access control mechanism, where
+ * there is an account (an owner) that can be granted exclusive access to
+ * specific functions.
  */
 contract Ownable {
     address internal _owner;
+    address internal _newOwner;
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipAccepted(address indexed previousOwner, address indexed newOwner);
+
 
     /**
-     * @dev The Ownable constructor sets the original `owner` of the contract
-     * to the sender account.
+     * @dev Initializes the contract setting the deployer as the initial owner.
      */
     constructor () internal {
         _owner = msg.sender;
@@ -105,61 +183,94 @@ contract Ownable {
     }
 
     /**
-     * @return the address of the owner.
+     * @dev Returns the addresses of the current and new owner.
      */
-    function owner() public view returns (address) {
-        return _owner;
+    function owner() public view returns (address currentOwner, address newOwner) {
+        currentOwner = _owner;
+        newOwner = _newOwner;
     }
 
     /**
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(msg.sender == _owner);
+        require(isOwner(), "Ownable: caller is not the owner");
         _;
     }
 
     /**
-     * @dev Allows the current owner to transfer control of the contract to a newOwner.
-     * @param newOwner The address to transfer ownership to.
+     * @dev Returns true if the caller is the current owner.
      */
-    function transferOwnership(address newOwner) external onlyOwner {
-        require(newOwner != address(0));
-        _owner = newOwner;
+    function isOwner() public view returns (bool) {
+        return msg.sender == _owner;
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     *
+     * IMPORTANT: Need to run {acceptOwnership} by the new owner.
+     */
+    function _transferOwnership(address newOwner) internal {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+
         emit OwnershipTransferred(_owner, newOwner);
+        _newOwner = newOwner;
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
+     *
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) public onlyOwner {
+        _transferOwnership(newOwner);
+    }
+
+    /**
+     * @dev Accept ownership of the contract.
+     *
+     * Can only be called by the new owner.
+     */
+    function acceptOwnership() public {
+        require(msg.sender == _newOwner, "Ownable: caller is not the new owner address");
+        require(msg.sender != address(0), "Ownable: caller is the zero address");
+
+        emit OwnershipAccepted(_owner, msg.sender);
+        _owner = msg.sender;
+        _newOwner = address(0);
     }
 
     /**
      * @dev Rescue compatible ERC20 Token
      *
-     * @param tokenAddr ERC20 The address of the ERC20 token contract
-     * @param receiver The address of the receiver
-     * @param amount uint256
+     * Can only be called by the current owner.
      */
-    function rescueTokens(address tokenAddr, address receiver, uint256 amount) external onlyOwner {
+    function rescueTokens(address tokenAddr, address recipient, uint256 amount) external onlyOwner {
         IERC20 _token = IERC20(tokenAddr);
-        require(receiver != address(0));
+        require(recipient != address(0), "Rescue: recipient is the zero address");
         uint256 balance = _token.balanceOf(address(this));
-        
-        require(balance >= amount);
-        assert(_token.transfer(receiver, amount));
+
+        require(balance >= amount, "Rescue: amount exceeds balance");
+        _token.transfer(recipient, amount);
     }
 
     /**
      * @dev Withdraw Ether
+     *
+     * Can only be called by the current owner.
      */
-    function withdrawEther(address payable to, uint256 amount) external onlyOwner {
-        require(to != address(0));
-        
+    function withdrawEther(address payable recipient, uint256 amount) external onlyOwner {
+        require(recipient != address(0), "Withdraw: recipient is the zero address");
+
         uint256 balance = address(this).balance;
-        
-        require(balance >= amount);
-        to.transfer(amount);
+
+        require(balance >= amount, "Withdraw: amount exceeds balance");
+        recipient.transfer(amount);
     }
 }
 
+
 /**
- * @title Pausable
  * @dev Base contract which allows children to implement an emergency stop mechanism.
  */
 contract Pausable is Ownable {
@@ -168,6 +279,10 @@ contract Pausable is Ownable {
     event Paused(address account);
     event Unpaused(address account);
 
+
+    /**
+     * @dev Constructor
+     */
     constructor () internal {
         _paused = false;
     }
@@ -183,66 +298,48 @@ contract Pausable is Ownable {
      * @dev Modifier to make a function callable only when the contract is not paused.
      */
     modifier whenNotPaused() {
-        require(!_paused);
+        require(!_paused, "Paused");
         _;
     }
 
     /**
-     * @dev Modifier to make a function callable only when the contract is paused.
+     * @dev Sets paused state.
+     *
+     * Can only be called by the current owner.
      */
-    modifier whenPaused() {
-        require(_paused);
-        _;
-    }
+    function setPaused(bool value) external onlyOwner {
+        _paused = value;
 
-    /**
-     * @dev Called by a pauser to pause, triggers stopped state.
-     */
-    function pause() external onlyOwner whenNotPaused {
-        _paused = true;
-        emit Paused(msg.sender);
-    }
-
-    /**
-     * @dev Called by a pauser to unpause, returns to normal state.
-     */
-    function unpause() external onlyOwner whenPaused {
-        _paused = false;
-        emit Unpaused(msg.sender);
+        if (_paused) {
+            emit Paused(msg.sender);
+        } else {
+            emit Unpaused(msg.sender);
+        }
     }
 }
 
-/**
- * @title Voken Main Contract
- */
-contract Voken is Ownable, Pausable, IERC20 {
-    using SafeMath for uint256;
 
-    string private _name = "Vision.Network 100G Token";
-    string private _symbol = "Voken";
+/**
+ * @title New Voken Main Contract
+ */
+contract NewVoken is Ownable, Pausable, IERC20 {
+    using SafeMath256 for uint256;
+    using Roles for Roles.Role;
+
+    string private _name = "New Vision.Network 100G Token";
+    string private _symbol = "Voken10";
     uint8 private _decimals = 6;                // 6 decimals
     uint256 private _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
     uint256 private _totalSupply;
-    
-    mapping (address => bool) private _minter;
-    event Mint(address indexed to, uint256 value);
-    event MinterChanged(address account, bool state);
 
-    mapping (address => uint256) private _balances;
-    mapping (address => mapping (address => uint256)) private _allowed;
-
-    bool private _allowWhitelistRegistration;
-    mapping(address => address) private _referrer;
-    mapping(address => uint256) private _refCount;
-
-    event VokenSaleWhitelistRegistered(address indexed addr, address indexed refAddr);
-    event VokenSaleWhitelistTransferred(address indexed previousAddr, address indexed _newAddr);
-    event VokenSaleWhitelistRegistrationEnabled();
-    event VokenSaleWhitelistRegistrationDisabled();
-
-    uint256 private _whitelistRegistrationValue = 1001000000;   // 1001 Voken, 1001.000000
-    uint256[15] private _whitelistRefRewards = [                // 100% Reward
-        301000000,  // 301 Voken for Level.1
+    bool private _safeMode;
+    bool private _whitelistingMode;
+    uint256 private _whitelistCounter;
+    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKENs for sign-up trigger
+    uint256 private _whitelistRefund = 1000000;         //    1 VOKEN  for success signal
+    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKENs for rewards
+    uint256[15] private _whitelistRewardsArr = [
+        300000000,  // 300 Voken for Level.1
         200000000,  // 200 Voken for Level.2
         100000000,  // 100 Voken for Level.3
         100000000,  // 100 Voken for Level.4
@@ -259,347 +356,647 @@ contract Voken is Ownable, Pausable, IERC20 {
         10000000    //  10 Voken for Level.15
     ];
 
+    Roles.Role private _globals;
+    Roles.Role private _proxies;
+    Roles.Role private _minters;
+
+    mapping (address => uint256) private _balances;
+    mapping (address => mapping (address => uint256)) private _allowances;
+    mapping (address => IAllocation[]) private _allocations;
+    mapping (address => mapping (address => bool)) private _addressAllocations;
+
+    mapping (address => address) private _referee;
+    mapping (address => address[]) private _referrals;
+
     event Donate(address indexed account, uint256 amount);
+    event Burn(address indexed account, uint256 amount);
+    event ProxyAdded(address indexed account);
+    event ProxyRemoved(address indexed account);
+    event GlobalAdded(address indexed account);
+    event GlobalRemoved(address indexed account);
+    event MinterAdded(address indexed account);
+    event MinterRemoved(address indexed account);
+    event Mint(address indexed account, uint256 amount);
+    event MintWithAllocation(address indexed account, uint256 amount, IAllocation indexed allocationContract);
+    event WhitelistSignUpEnabled();
+    event WhitelistSignUpDisabled();
+    event WhitelistSignUp(address indexed account, address indexed refereeAccount);
 
 
     /**
      * @dev Constructor
      */
-    constructor() public {
-        _minter[msg.sender] = true;
-        _allowWhitelistRegistration = true;
+    constructor () public {
+        _whitelistingMode = true;
+        _safeMode = true;
 
-        emit VokenSaleWhitelistRegistrationEnabled();
+        _referee[msg.sender] = msg.sender;
+        _whitelistCounter = 1;
 
-        _referrer[msg.sender] = msg.sender;
-        emit VokenSaleWhitelistRegistered(msg.sender, msg.sender);
+        addGlobal(address(this));
+        addProxy(msg.sender);
+        addMinter(msg.sender);
+
+        emit WhitelistSignUpEnabled();
+        emit WhitelistSignUp(msg.sender, msg.sender);
     }
 
-
     /**
-     * @dev donate
+     * @dev Donate
      */
     function () external payable {
-        emit Donate(msg.sender, msg.value);
+        if (msg.value > 0) {
+            emit Donate(msg.sender, msg.value);
+        }
     }
 
-
     /**
-     * @return the name of the token.
+     * @dev Returns the full name of VOKEN.
      */
     function name() public view returns (string memory) {
         return _name;
     }
 
     /**
-     * @return the symbol of the token.
+     * @dev Returns the symbol of VOKEN.
      */
     function symbol() public view returns (string memory) {
         return _symbol;
     }
 
     /**
-     * @return the number of decimals of the token.
+     * @dev Returns the number of decimals used to get its user representation.
      */
     function decimals() public view returns (uint8) {
         return _decimals;
     }
 
     /**
-     * @return the cap for the token minting.
+     * @dev Returns the cap on VOKEN's total supply.
      */
     function cap() public view returns (uint256) {
         return _cap;
     }
-    
+
     /**
-     * @dev Total number of tokens in existence.
+     * @dev Returns the amount of VOKEN in existence.
      */
     function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }
 
     /**
-     * @dev Gets the balance of the specified address.
-     * @param owner The address to query the balance of.
-     * @return A uint256 representing the amount owned by the passed address.
+     * @dev Returns the amount of VOKENs owned by `account`.
      */
-    function balanceOf(address owner) public view returns (uint256) {
-        return _balances[owner];
+    function balanceOf(address account) public view returns (uint256) {
+        return _balances[account];
     }
 
     /**
-     * @dev Function to check the amount of tokens that an owner allowed to a spender.
-     * @param owner address The address which owns the funds.
-     * @param spender address The address which will spend the funds.
-     * @return A uint256 specifying the amount of tokens still available for the spender.
+     * @dev Returns the reserved amount of VOKENs by `account`.
+     */
+    function reservedOf(address account) public view returns (uint256) {
+        uint256 __reserved;
+
+        uint256 __len = _allocations[account].length;
+        if (__len > 0) {
+            for (uint256 i = 0; i < __len; i++) {
+                __reserved = __reserved.add(_allocations[account][i].reservedOf(account));
+            }
+        }
+
+        return __reserved;
+    }
+
+    /**
+     * @dev Returns the available amount of VOKENs by `account`.
+     */
+    function availableOf(address account) public view returns (uint256) {
+        return balanceOf(account).sub(reservedOf(account));
+    }
+
+    /**
+     * @dev Returns the available amount of VOKENs by `account` and a certain `amount`.
+     */
+    function _getAvailableAmount(address account, uint256 amount) internal view returns (uint256) {
+        uint256 __available = balanceOf(account).sub(reservedOf(account));
+
+        if (amount <= __available) {
+            return amount;
+        }
+
+        else if (__available > 0) {
+            return __available;
+        }
+
+        revert("VOKEN: available balance is zero");
+    }
+
+    /**
+     * @dev Returns the allocation contracts' addresses on `account`.
+     */
+    function allocations(address account) public view returns (IAllocation[] memory contracts) {
+        contracts = _allocations[account];
+    }
+
+    /**
+     * @dev Moves `amount` VOKENs from the caller's account to `recipient`.
+     *
+     * Auto handle whitelist sign-up when `amount` is a specific value.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     */
+    function transfer(address recipient, uint256 amount) public whenNotPaused returns (bool) {
+        // Whitelist sign-up
+        if (amount == _whitelistTrigger && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
+            _transfer(msg.sender, address(this), _whitelistTrigger);
+            _whitelist(msg.sender, recipient);
+            _distributeVokens(msg.sender);
+        }
+
+        // Burn
+        else if (recipient == address(this) || recipient == address(0)) {
+            _burn(msg.sender, amount);
+        }
+
+        // Normal Transfer
+        else {
+            _transfer(msg.sender, recipient, _getAvailableAmount(msg.sender, amount));
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Moves `amount` VOKENs from `sender` to `recipient` using the
+     * allowance mechanism. `amount` is then deducted from the caller's
+     * allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     * Emits an {Approval} event indicating the updated allowance.
+     */
+    function transferFrom(address sender, address recipient, uint256 amount) public whenNotPaused returns (bool) {
+        // Burn
+        if (recipient == address(this) || recipient == address(0)) {
+            _burn(msg.sender, amount);
+        }
+
+        // Normal transfer
+        else {
+            uint256 __amount = _getAvailableAmount(sender, amount);
+
+            _transfer(sender, recipient, __amount);
+            _approve(sender, msg.sender, _allowances[sender][msg.sender].sub(__amount, "VOKEN: transfer amount exceeds allowance"));
+        }
+
+        return true;
+    }
+
+    /**
+     * @dev Destroys `amount` VOKENs from the caller.
+     *
+     * Emits a {Transfer} event with `to` set to the zero address.
+     */
+    function burn(uint256 amount) public whenNotPaused returns (bool) {
+        _burn(msg.sender, amount);
+        return true;
+    }
+
+    /**
+     * @dev Destoys `amount` VOKENs from `account`.`amount` is then deducted
+     * from the caller's allowance.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits a {Transfer} event.
+     * Emits an {Approval} event indicating the updated allowance.
+     */
+    function burnFrom(address account, uint256 amount) public whenNotPaused returns (bool) {
+        _burn(account, amount);
+        _approve(account, msg.sender, _allowances[account][msg.sender].sub(amount, "VOKEN: burn amount exceeds allowance"));
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     *
+     * Can only be called by a minter.
+     */
+    function mint(address account, uint256 amount) public whenNotPaused onlyMinter returns (bool) {
+        _mint(account, amount);
+        return true;
+    }
+
+    /**
+     * @dev Creates `amount` VOKENs and assigns them to `account`.
+     *
+     * With an `allocationContract`
+     *
+     * Can only be called by a minter.
+     */
+    function mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) public whenNotPaused onlyMinter returns (bool) {
+        _mintWithAllocation(account, amount, allocationContract);
+        return true;
+    }
+
+    /**
+     * @dev Returns the remaining number of VOKENs that `spender` will be
+     * allowed to spend on behalf of `owner` through {transferFrom}.
+     * This is zero by default.
      */
     function allowance(address owner, address spender) public view returns (uint256) {
-        return _allowed[owner][spender];
+        return _allowances[owner][spender];
     }
 
     /**
-     * @dev Transfer token to a specified address.
-     * @param to The address to transfer to.
-     * @param value The amount to be transferred.
+     * @dev Sets `amount` as the allowance of `spender` over the caller's tokens.
+     *
+     * Returns a boolean value indicating whether the operation succeeded.
+     *
+     * Emits an {Approval} event.
      */
-    function transfer(address to, uint256 value) public whenNotPaused returns (bool) {
-        if (_allowWhitelistRegistration && value == _whitelistRegistrationValue
-            && inWhitelist(to) && !inWhitelist(msg.sender) && isNotContract(msg.sender)) {
-            // Register whitelist for Voken-Sale
-            _regWhitelist(msg.sender, to);
-            return true;
-        } else {
-            // Normal Transfer
-            _transfer(msg.sender, to, value);
-            return true;
-        }
-    }
-
-    /**
-     * @dev Approve the passed address to spend the specified amount of tokens on behalf of msg.sender.
-     * @param spender The address which will spend the funds.
-     * @param value The amount of tokens to be spent.
-     */
-    function approve(address spender, uint256 value) public returns (bool) {
+    function approve(address spender, uint256 value) public whenNotPaused returns (bool) {
         _approve(msg.sender, spender, value);
         return true;
     }
 
     /**
-     * @dev Increase the amount of tokens that an owner allowed to a spender.
-     * @param spender The address which will spend the funds.
-     * @param addedValue The amount of tokens to increase the allowance by.
+     * @dev Atomically increases the allowance granted to `spender` by the caller.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
      */
-    function increaseAllowance(address spender, uint256 addedValue) public returns (bool) {
-        _approve(msg.sender, spender, _allowed[msg.sender][spender].add(addedValue));
+    function increaseAllowance(address spender, uint256 addedValue) public whenNotPaused returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].add(addedValue));
         return true;
     }
 
     /**
-     * @dev Decrease the amount of tokens that an owner allowed to a spender.
-     * @param spender The address which will spend the funds.
-     * @param subtractedValue The amount of tokens to decrease the allowance by.
+     * @dev Atomically decreases the allowance granted to `spender` by the caller.
+     *
+     * Emits an {Approval} event indicating the updated allowance.
      */
-    function decreaseAllowance(address spender, uint256 subtractedValue) public returns (bool) {
-        _approve(msg.sender, spender, _allowed[msg.sender][spender].sub(subtractedValue));
-        return true;
-    }
-    /**
-     * @dev Transfer tokens from one address to another.
-     * @param from address The address which you want to send tokens from
-     * @param to address The address which you want to transfer to
-     * @param value uint256 the amount of tokens to be transferred
-     */
-    function transferFrom(address from, address to, uint256 value) public whenNotPaused returns (bool) {
-        require(_allowed[from][msg.sender] >= value);
-        _transfer(from, to, value);
-        _approve(from, msg.sender, _allowed[from][msg.sender].sub(value));
+    function decreaseAllowance(address spender, uint256 subtractedValue) public whenNotPaused returns (bool) {
+        _approve(msg.sender, spender, _allowances[msg.sender][spender].sub(subtractedValue, "VOKEN: decreased allowance below zero"));
         return true;
     }
 
     /**
-     * @dev Transfer token for a specified addresses.
-     * @param from The address to transfer from.
-     * @param to The address to transfer to.
-     * @param value The amount to be transferred.
+     * @dev Moves VOKENs `amount` from `sender` to `recipient`.
+     *
+     * May reject non-whitelist transaction.
+     *
+     * Emits a {Transfer} event.
      */
-    function _transfer(address from, address to, uint256 value) internal {
-        require(to != address(0));
+    function _transfer(address sender, address recipient, uint256 amount) internal {
+        require(recipient != address(0), "VOKEN: recipient is the zero address");
 
-        _balances[from] = _balances[from].sub(value);
-        _balances[to] = _balances[to].add(value);
-        emit Transfer(from, to, value);
+        if (_safeMode && !isGlobal(sender) && !isGlobal(recipient)) {
+            require(whitelisted(sender), "VOKEN: sender is not whitelisted");
+        }
+
+        _balances[sender] = _balances[sender].sub(amount);
+        _balances[recipient] = _balances[recipient].add(amount);
+        emit Transfer(sender, recipient, amount);
     }
 
     /**
-     * @dev Approve an address to spend another addresses' tokens.
-     * @param owner The address that owns the tokens.
-     * @param spender The address that will spend the tokens.
-     * @param value The number of tokens that can be spent.
+     * @dev Creates `amount` VOKENs and assigns them to `account`, increasing the total supply.
+     *
+     * Emits a {Mint} event.
+     * Emits a {Transfer} event with `from` set to the zero address.
+     */
+    function _mint(address account, uint256 amount) internal {
+        require(_totalSupply.add(amount) <= _cap, "VOKEN: total supply cap exceeded");
+        require(account != address(0), "VOKEN: mint to the zero address");
+
+        _totalSupply = _totalSupply.add(amount);
+        _balances[account] = _balances[account].add(amount);
+        emit Mint(account, amount);
+        emit Transfer(address(0), account, amount);
+    }
+
+    /**
+     * @dev Creates `amount` VOKENs and assigns them to `account`, increasing the total supply.
+     *
+     * With an `allocationContract`
+     *
+     * Emits a {Transfer} event with `from` set to the zero address.
+     */
+    function _mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) internal {
+        require(_totalSupply.add(amount) <= _cap, "VOKEN: total supply cap exceeded");
+        require(account != address(0), "VOKEN: mint to the zero address");
+
+        _totalSupply = _totalSupply.add(amount);
+        _balances[account] = _balances[account].add(amount);
+
+        if (!_addressAllocations[account][address(allocationContract)]) {
+            _allocations[account].push(allocationContract);
+            _addressAllocations[account][address(allocationContract)] = true;
+        }
+
+        emit MintWithAllocation(account, amount, allocationContract);
+        emit Transfer(address(0), account, amount);
+    }
+
+    /**
+     * @dev Destroys `amount` VOKENs from `account`, reducing the total supply.
+     *
+     * Emits a {Burn} event.
+     * Emits a {Transfer} event with `to` set to the zero address.
+     */
+    function _burn(address account, uint256 amount) internal {
+        uint256 __amount = _getAvailableAmount(account, amount);
+
+        _balances[account] = _balances[account].sub(__amount, "VOKEN: burn amount exceeds balance");
+        _totalSupply = _totalSupply.sub(__amount);
+        emit Burn(account, __amount);
+        emit Transfer(account, address(0), __amount);
+    }
+
+    /**
+     * @dev Sets `amount` as the allowance of `spender` over the `owner`s VOKENs.
+     *
+     * Emits an {Approval} event.
      */
     function _approve(address owner, address spender, uint256 value) internal {
-        require(owner != address(0));
-        require(spender != address(0));
+        require(owner != address(0), "VOKEN: approve from the zero address");
+        require(spender != address(0), "VOKEN: approve to the zero address");
+        require(value <= _getAvailableAmount(spender, value), "VOKEN: approve exceeds available balance");
 
-        _allowed[owner][spender] = value;
+        _allowances[owner][spender] = value;
         emit Approval(owner, spender, value);
     }
 
 
+
+
+
+
+
+
+
     /**
-     * @dev Throws if called by account not a minter.
+     * @dev Sets the full name of VOKEN.
+     *
+     * Can only be called by the current owner.
      */
-    modifier onlyMinter() {
-        require(_minter[msg.sender]);
-        _;
+    function rename(string calldata value) external onlyOwner {
+        _name = value;
     }
 
     /**
-     * @dev Returns true if the given account is minter.
+     * @dev Sets the symbol of VOKEN.
+     *
+     * Can only be called by the current owner.
      */
-    function isMinter(address account) public view returns (bool) {
-        return _minter[account];
+    function setSymbol(string calldata value) external onlyOwner {
+        _symbol = value;
     }
 
     /**
-     * @dev Set a minter state
+     * @dev Returns true if the sign-up for whitelist is allowed.
      */
-    function setMinterState(address account, bool state) external onlyOwner {
-        _minter[account] = state;
-        emit MinterChanged(account, state);
+    function whitelistingMode() public view returns (bool) {
+        return _whitelistingMode;
     }
 
     /**
-     * @dev Function to mint tokens
-     * @param to The address that will receive the minted tokens.
-     * @param value The amount of tokens to mint.
-     * @return A boolean that indicates if the operation was successful.
+     * @dev Returns the whitelist counter.
      */
-    function mint(address to, uint256 value) public onlyMinter returns (bool) {
-        _mint(to, value);
+    function whitelistCounter() public view returns (uint256) {
+        return _whitelistCounter;
+    }
+
+    /**
+     * @dev Returns the referee of an `account`.
+     */
+    function whitelistReferee(address account) public view returns (address) {
+        return _referee[account];
+    }
+
+    /**
+     * @dev Returns referrals of a `account`
+     */
+    function whitelistReferrals(address account) public view returns (address[] memory) {
+        return _referrals[account];
+    }
+
+    /**
+     * @dev Returns the referrals count of an `account`.
+     */
+    function whitelistReferralsCount(address account) public view returns (uint256) {
+        return _referrals[account].length;
+    }
+
+    /**
+     * @dev Returns true if the `account` is whitelisted.
+     */
+    function whitelisted(address account) public view returns (bool) {
+        return _referee[account] != address(0);
+    }
+
+    /**
+     * @dev Push whitelist, batch.
+     *
+     * Can only be called by a proxy.
+     */
+    function pushWhitelist(address[] memory accounts, address[] memory refereeAccounts) public onlyProxy returns (bool) {
+        require(accounts.length == refereeAccounts.length, "VOKEN Whitelist: batch length is not match");
+
+        for (uint256 i = 0; i < accounts.length; i++) {
+            if (accounts[i] != address(0) && !whitelisted(accounts[i]) && whitelisted(refereeAccounts[i])) {
+                _whitelist(accounts[i], refereeAccounts[i]);
+            }
+        }
+
         return true;
     }
 
     /**
-     * @dev Internal function that mints an amount of the token and assigns it to an account.
-     * @param account The account that will receive the created tokens.
-     * @param value The amount that will be created.
+     * @dev Whitelist an `account` with a `refereeAccount`.
+     *
+     * Emits {WhitelistSignUp} event.
      */
-    function _mint(address account, uint256 value) internal {
-        require(_totalSupply.add(value) <= _cap);
-        require(account != address(0));
+    function _whitelist(address account, address refereeAccount) internal {
+        require(!whitelisted(account), "Whitelist: account is already whitelisted");
+        require(whitelisted(refereeAccount), "Whitelist: refereeAccount is not whitelisted");
 
-        _totalSupply = _totalSupply.add(value);
-        _balances[account] = _balances[account].add(value);
-        emit Mint(account, value);
-        emit Transfer(address(0), account, value);
+        _referee[account] = refereeAccount;
+        _referrals[refereeAccount].push(account);
+        _whitelistCounter = _whitelistCounter.add(1);
+
+        emit WhitelistSignUp(account, refereeAccount);
     }
 
     /**
-     * @dev Throws if called by account not in whitelist.
+     * @dev Distribute VOKENs.
      */
-    modifier onlyInWhitelist() {
-        require(_referrer[msg.sender] != address(0));
+    function _distributeVokens(address account) internal {
+        uint256 __distributedAmount;
+        uint256 __burnAmount;
+
+        address __cursor = account;
+        for(uint i = 0; i < _whitelistRewardsArr.length; i++) {
+            address __receiver = _referee[__cursor];
+
+            if (__receiver != address(0)) {
+                if (__receiver != __cursor && _referrals[__receiver].length > i) {
+                    _transfer(address(this), __receiver, _whitelistRewardsArr[i]);
+                    __distributedAmount = __distributedAmount.add(_whitelistRewardsArr[i]);
+                }
+            }
+
+            __cursor = _referee[__cursor];
+        }
+
+        // Burn
+        __burnAmount = _whitelistRewards.sub(__distributedAmount);
+        if (__burnAmount > 0) {
+            _burn(address(this), __burnAmount);
+        }
+
+        // Transfer VOKEN refund as a success signal.
+        _transfer(address(this), account, _whitelistRefund);
+    }
+
+
+
+
+
+
+
+
+
+    /**
+     * @dev Enable/disable sign-up for whitelist.
+     *
+     * Can only be called by the current owner.
+     */
+    function setWhitelistingMode(bool value) public onlyOwner {
+        _whitelistingMode = value;
+
+        if (_whitelistingMode) {
+            emit WhitelistSignUpEnabled();
+        } else {
+            emit WhitelistSignUpDisabled();
+        }
+    }
+
+    /**
+     * @dev Returns true if a transaction from non-whitelisted address is not allowed.
+     */
+    function safeMode() public view returns (bool) {
+        return _safeMode;
+    }
+
+    /**
+     * @dev Disable/enable non-whitelist transaction.
+     *
+     * Can only be called by the current owner.
+     */
+    function setSafeMode(bool value) public onlyOwner {
+        _safeMode = value;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Global role
+     */
+    function isGlobal(address account) public view returns (bool) {
+        return _globals.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Global role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addGlobal(address account) public onlyOwner {
+        _globals.add(account);
+        emit GlobalAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Global role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeGlobal(address account) public onlyOwner {
+        _globals.remove(account);
+        emit GlobalRemoved(account);
+    }
+
+    /**
+     * @dev Throws if called by account which is not a proxy.
+     */
+    modifier onlyProxy() {
+        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
         _;
     }
 
     /**
-     * @dev Returns true if the whitelist registration is allowed.
+     * @dev Returns true if the `account` has the Proxy role.
      */
-    function allowWhitelistRegistration() public view returns (bool) {
-        return _allowWhitelistRegistration;
+    function isProxy(address account) public view returns (bool) {
+        return _proxies.has(account);
     }
 
     /**
-     * @dev Returns true if the given account is in whitelist.
+     * @dev Give an `account` access to the Proxy role.
+     *
+     * Can only be called by the current owner.
      */
-    function inWhitelist(address account) public view returns (bool) {
-        return _referrer[account] != address(0);
+    function addProxy(address account) public onlyOwner {
+        _proxies.add(account);
+        emit ProxyAdded(account);
     }
 
     /**
-     * @dev Returns the referrer of a given account address
+     * @dev Remove an `account` access from the Proxy role.
+     *
+     * Can only be called by the current owner.
      */
-    function referrer(address account) public view returns (address) {
-        return _referrer[account];
+    function removeProxy(address account) public onlyOwner {
+        _proxies.remove(account);
+        emit ProxyRemoved(account);
     }
 
     /**
-     * @dev Returns the referrals count of a given account address
+     * @dev Throws if called by account which is not a minter.
      */
-    function refCount(address account) public view returns (uint256) {
-        return _refCount[account];
+    modifier onlyMinter() {
+        require(isMinter(msg.sender), "MinterRole: caller does not have the Minter role");
+        _;
     }
 
     /**
-     * @dev Disable Voken-Sale whitelist registration. Unrecoverable!
+     * @dev Returns true if the `account` has the Minter role
      */
-    function disableVokenSaleWhitelistRegistration() external onlyOwner {
-        _allowWhitelistRegistration = false;
-        emit VokenSaleWhitelistRegistrationDisabled();
+    function isMinter(address account) public view returns (bool) {
+        return _minters.has(account);
     }
 
     /**
-     * @dev Register whitelist for Voken-Sale
+     * @dev Give an `account` access to the Minter role.
+     *
+     * Can only be called by the current owner.
      */
-    function _regWhitelist(address account, address refAccount) internal {
-        _refCount[refAccount] = _refCount[refAccount].add(1);
-        _referrer[account] = refAccount;
-
-        emit VokenSaleWhitelistRegistered(account, refAccount);
-
-        // Whitelist Registration Referral Reward
-        _transfer(msg.sender, address(this), _whitelistRegistrationValue);
-        address cursor = account;
-        uint256 remain = _whitelistRegistrationValue;
-        for(uint i = 0; i < _whitelistRefRewards.length; i++) {
-            address receiver = _referrer[cursor];
-
-            if (cursor != receiver) {
-                if (_refCount[receiver] > i) {
-                    _transfer(address(this), receiver, _whitelistRefRewards[i]);
-                    remain = remain.sub(_whitelistRefRewards[i]);
-                }
-            } else {
-                _transfer(address(this), refAccount, remain);
-                break;
-            }
-
-            cursor = _referrer[cursor];
-        }
+    function addMinter(address account) public onlyOwner {
+        _minters.add(account);
+        emit MinterAdded(account);
     }
 
     /**
-     * @dev Transfer the whitelisted address to another.
+     * @dev Remove an `account` access from the Minter role.
+     *
+     * Can only be called by the current owner.
      */
-    function transferWhitelist(address account) external onlyInWhitelist {
-        require(isNotContract(account));
-
-        _refCount[account] = _refCount[msg.sender];
-        _refCount[msg.sender] = 0;
-        _referrer[account] = _referrer[msg.sender];
-        _referrer[msg.sender] = address(0);
-        emit VokenSaleWhitelistTransferred(msg.sender, account);
-    }
-
-    /**
-     * @dev Returns true if the given address is not a contract
-     */
-    function isNotContract(address addr) internal view returns (bool) {
-        uint size;
-        assembly {
-            size := extcodesize(addr)
-        }
-        return size == 0;
-    }
-
-    /**
-     * @dev Calculator
-     * Returns the reward amount if someone now registers the whitelist directly with the given whitelistedAccount.
-     */
-    function calculateTheRewardOfDirectWhitelistRegistration(address whitelistedAccount) external view returns (uint256 reward) {
-        if (!inWhitelist(whitelistedAccount)) {
-            return 0;
-        }
-
-        address cursor = whitelistedAccount;
-        uint256 remain = _whitelistRegistrationValue;
-        for(uint i = 1; i < _whitelistRefRewards.length; i++) {
-            address receiver = _referrer[cursor];
-
-            if (cursor != receiver) {
-                if (_refCount[receiver] > i) {
-                    remain = remain.sub(_whitelistRefRewards[i]);
-                }
-            } else {
-                reward = reward.add(remain);
-                break;
-            }
-
-            cursor = _referrer[cursor];
-        }
-
-        return reward;
+    function removeMinter(address account) public onlyOwner {
+        _minters.remove(account);
+        emit MinterRemoved(account);
     }
 }
+
