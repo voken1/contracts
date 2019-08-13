@@ -1,6 +1,6 @@
 pragma solidity ^0.5.10;
 
-// New Vision.Network 100G Token
+// Vision.Network 100G Token v2.0
 //
 // Upgraded in Aug 2019
 //
@@ -320,14 +320,14 @@ contract Pausable is Ownable {
 
 
 /**
- * @title New Voken Main Contract
+ * @title Voken Main Contract v2.0
  */
-contract NewVoken is Ownable, Pausable, IERC20 {
+contract Voken2 is Ownable, Pausable, IERC20 {
     using SafeMath256 for uint256;
     using Roles for Roles.Role;
 
-    string private _name = "New Vision.Network 100G Token";
-    string private _symbol = "VokenNEW";
+    string private _name = "Vision.Network 100G Token v2.0";
+    string private _symbol = "Voken2.0";
     uint8 private _decimals = 6;
     uint256 private _cap;
     uint256 private _totalSupply;
