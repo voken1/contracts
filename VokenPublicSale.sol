@@ -180,6 +180,42 @@ library SafeMath16 {
 
 
 /**
+ * @title Roles
+ * @dev Library for managing addresses assigned to a Role.
+ */
+library Roles {
+    struct Role {
+        mapping (address => bool) bearer;
+    }
+
+    /**
+     * @dev Give an account access to this role.
+     */
+    function add(Role storage role, address account) internal {
+        require(!has(role, account), "Roles: account already has role");
+        role.bearer[account] = true;
+    }
+
+    /**
+     * @dev Remove an account's access to this role.
+     */
+    function remove(Role storage role, address account) internal {
+        require(has(role, account), "Roles: account does not have role");
+        role.bearer[account] = false;
+    }
+
+    /**
+     * @dev Check if an account has this role.
+     * @return bool
+     */
+    function has(Role storage role, address account) internal view returns (bool) {
+        require(account != address(0), "Roles: account is the zero address");
+        return role.bearer[account];
+    }
+}
+
+
+/**
  * @dev Contract module which provides a basic access control mechanism, where
  * there is an account (an owner) that can be granted exclusive access to
  * specific functions.
@@ -352,9 +388,11 @@ interface IERC20 {
 interface IVoken2 {
     function balanceOf(address owner) external view returns (uint256);
     function transfer(address to, uint256 value) external returns (bool);
-    function inWhitelist(address account) external view returns (bool);
-    function referrer(address account) external view returns (address);
-    function refCount(address account) external view returns (uint256);
+    function mint(address account, uint256 amount) external returns (bool);
+    function mintWithAllocation(address account, uint256 amount, address allocationContract) external returns (bool);
+    function whitelisted(address account) external view returns (bool);
+    function whitelistReferee(address account) external view returns (address);
+    function whitelistReferralsCount(address account) external view returns (uint256);
 }
 
 
@@ -362,14 +400,14 @@ interface IVoken2 {
 
 
 /**
- * @title Voken Public Sale
+ * @title Voken Public Sale v2.0
  */
-contract VokenPublicSale is Ownable, Pausable{
+contract VokenPublicSale2 is Ownable, Pausable{
     using SafeMath16 for uint16;
     using SafeMath256 for uint256;
 
     // Voken
-    IVoken public VOKEN = IVoken(0x82070415FEe803f94Ce5617Be1878503e58F0a6a);
+    IVoken2 private _voken;
 
     // Start timestamp
     uint32 _startTimestamp;
@@ -378,7 +416,6 @@ contract VokenPublicSale is Ownable, Pausable{
     uint256 private _etherPrice;    // 1 Ether = xx.xxxxxx USD, with 6 decimals
 
     // Referral rewards, 35% for 15 levels
-    uint16 private WHITELIST_REF_REWARDS_PCT_SUM = 35;
     uint16[15] private WHITELIST_REF_REWARDS_PCT = [
         6,  // 6% for Level.1
         6,  // 6% for Level.2
@@ -405,7 +442,7 @@ contract VokenPublicSale is Ownable, Pausable{
     uint24 private GAS_EX = 1500000;        // 1.5 Mwei gas for ex
 
     // Price
-    uint256 private VOKEN_USD_PRICE_START = 1000;       // $      0.00100 USD    
+    uint256 private VOKEN_USD_PRICE_START = 1000;       // $      0.00100 USD
     uint256 private VOKEN_USD_PRICE_STEP = 10;          // $    + 0.00001 USD
     uint256 private STAGE_USD_CAP_START = 100000000;    // $    100 USD
     uint256 private STAGE_USD_CAP_STEP = 1000000;       // $     +1 USD
