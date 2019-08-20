@@ -145,22 +145,18 @@ library Allocations {
      * @dev Returns the available amount.
      */
     function available(Allocation storage self) internal view returns (uint256) {
-        uint256 timestamp = 1588291199; // Thu, 30 Apr 2020 23:59:59 +0000
-        uint256 interval = 1 days;
-        uint256 steps = 61;
+        uint256 __timestamp = 1588291199; // Thu, 30 Apr 2020 23:59:59 +0000
+        uint256 __interval = 1 days;
+        uint256 __steps = 60;
 
-        if (now > timestamp) {
-            if (interval == 0) {
+        if (now > __timestamp) {
+            uint256 __passed = now.sub(__timestamp).div(__interval).add(1);
+
+            if (__passed >= __steps) {
                 return self.amount;
             }
 
-            uint256 __passed = now.sub(timestamp).div(interval).add(1);
-
-            if (__passed >= steps) {
-                return self.amount;
-            }
-
-            return self.amount.mul(__passed).div(steps);
+            return self.amount.mul(__passed).div(__steps);
         }
 
         return 0;
@@ -204,9 +200,9 @@ interface IAllocation {
 
 
 /**
- * @dev Interface of VOKEN
+ * @dev Interface of Voken2.0
  */
-interface IVoken {
+interface IVoken2 {
     function balanceOf(address account) external view returns (uint256);
     function transfer(address recipient, uint256 amount) external returns (bool);
     function mintWithAllocation(address account, uint256 amount, address allocationContract) external returns (bool);
@@ -328,11 +324,11 @@ contract VokenShareholders is Ownable, IAllocation {
     using Roles for Roles.Role;
     using Allocations for Allocations.Allocation;
 
-    IVoken private _voken;
+    IVoken2 private _voken;
     Roles.Role private _proxies;
 
     uint256 private _page;
-    uint256 private _ethers;
+    uint256 private _weis;
     uint256 private _vokens;
 
     address[] private _shareholders;
@@ -351,15 +347,16 @@ contract VokenShareholders is Ownable, IAllocation {
 
     mapping (address => Allocations.Allocation[]) private _allocations;
 
-    event Dividend(address indexed account, uint256 amount, uint256 page);
     event ProxyAdded(address indexed account);
     event ProxyRemoved(address indexed account);
+    event Dividend(address indexed account, uint256 amount, uint256 page);
 
 
     /**
      * @dev Constructor
      */
     constructor () public {
+        // _voken = IVoken2(0);
         _page = 1;
 
         addProxy(msg.sender);
@@ -375,8 +372,8 @@ contract VokenShareholders is Ownable, IAllocation {
     /**
      * @dev Returns the amount of deposited Ether.
      */
-    function ethers() public view returns (uint256) {
-        return _ethers;
+    function weis() public view returns (uint256) {
+        return _weis;
     }
 
     /**
@@ -411,7 +408,7 @@ contract VokenShareholders is Ownable, IAllocation {
     /**
      * @dev Returns the VOKEN main contract address.
      */
-    function VOKEN() public view returns (IVoken) {
+    function VOKEN() public view returns (IVoken2) {
         return _voken;
     }
 
@@ -632,7 +629,7 @@ contract VokenShareholders is Ownable, IAllocation {
     function () external payable {
         // deposit
         if (msg.value > 0) {
-            _ethers = _ethers.add(msg.value);
+            _weis = _weis.add(msg.value);
             _pageEthers[_page] = _pageEthers[_page].add(msg.value);
         }
 
@@ -661,7 +658,7 @@ contract VokenShareholders is Ownable, IAllocation {
     /**
      * @dev Sets the VOKEN main contract address.
      */
-    function setVokenMainContract(IVoken vokenMainContract) public onlyOwner {
+    function setVokenMainContract(IVoken2 vokenMainContract) public onlyOwner {
         require(address(vokenMainContract) != address(0), "VOKEN: main contract is the zero address");
         _voken = vokenMainContract;
     }
