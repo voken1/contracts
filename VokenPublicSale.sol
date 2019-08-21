@@ -1,4 +1,4 @@
-pragma solidity ^0.5.10;
+pragma solidity ^0.5.11;
 
 // Public-Sale for Voken2.0
 //
@@ -248,15 +248,15 @@ contract Ownable {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(isOwner(), "Ownable: caller is not the owner");
+        require(isOwner(msg.sender), "Ownable: caller is not the owner");
         _;
     }
 
     /**
      * @dev Returns true if the caller is the current owner.
      */
-    function isOwner() public view returns (bool) {
-        return msg.sender == _owner;
+    function isOwner(address account) public view returns (bool) {
+        return account == _owner;
     }
 
     /**
@@ -889,7 +889,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
         uint256 __usdRemain;
         uint256 __usdUsed;
         uint256 __weiUsed;
-        uint256 __vokenIssued;
+        uint256 __voken;
 
         // Limit
         (uint256 __limitIndex, uint256 __weiMax) = _limit(msg.value);
@@ -906,11 +906,11 @@ contract VokenPublicSale2 is Ownable, Pausable {
         _cache();
 
         // USD => Voken
-        while (gasleft() > GAS_EX && __usdRemain > 0 && _stage <= STAGE_MAX) {
+        while (gasleft() > GAS_EX && __usdRemain > 0 && _stage <= STAGE_LIMIT) {
             uint256 __txVokenIssued;
             (__txVokenIssued, __usdRemain) = _tx(__usdRemain);
 
-            __vokenIssued = __vokenIssued.add(__txVokenIssued);
+            __voken = __voken.add(__txVokenIssued);
         }
 
         // Used
@@ -918,8 +918,8 @@ contract VokenPublicSale2 is Ownable, Pausable {
         __weiUsed = _usd2wei(__usdUsed);
 
         // Whitelist
-        if (_cacheWhitelisted && __vokenIssued > 0) {
-            _mintVokenBonus(__vokenIssued);
+        if (_cacheWhitelisted && __voken > 0) {
+            _mintVokenBonus(__voken);
 
             for(uint16 i = 0; i < _cacheReferees.length; i++) {
                 address payable __referee = _cacheReferees[i];

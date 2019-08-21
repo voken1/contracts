@@ -1,4 +1,4 @@
-pragma solidity ^0.5.10;
+pragma solidity ^0.5.11;
 
 // Vision.Network 100G Token v2.0
 //
@@ -194,15 +194,15 @@ contract Ownable {
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(isOwner(), "Ownable: caller is not the owner");
+        require(isOwner(msg.sender), "Ownable: caller is not the owner");
         _;
     }
 
     /**
      * @dev Returns true if the caller is the current owner.
      */
-    function isOwner() public view returns (bool) {
-        return msg.sender == _owner;
+    function isOwner(address account) public view returns (bool) {
+        return account == _owner;
     }
 
     /**

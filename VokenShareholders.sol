@@ -1,4 +1,4 @@
-pragma solidity ^0.5.10;
+pragma solidity ^0.5.11;
 
 // Voken Shareholders Contract
 //
@@ -221,6 +221,7 @@ contract Ownable {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event OwnershipAccepted(address indexed previousOwner, address indexed newOwner);
 
+
     /**
      * @dev Initializes the contract setting the deployer as the initial owner.
      */
@@ -232,29 +233,40 @@ contract Ownable {
     /**
      * @dev Returns the addresses of the current and new owner.
      */
-    function owner() public view returns (address, address) {
-        return (_owner, _newOwner);
+    function owner() public view returns (address currentOwner, address newOwner) {
+        currentOwner = _owner;
+        newOwner = _newOwner;
     }
 
     /**
      * @dev Throws if called by any account other than the owner.
      */
     modifier onlyOwner() {
-        require(isOwner(), "Ownable: caller is not the owner");
+        require(isOwner(msg.sender), "Ownable: caller is not the owner");
         _;
     }
 
     /**
      * @dev Returns true if the caller is the current owner.
      */
-    function isOwner() public view returns (bool) {
-        return msg.sender == _owner;
+    function isOwner(address account) public view returns (bool) {
+        return account == _owner;
     }
 
     /**
      * @dev Transfers ownership of the contract to a new account (`newOwner`).
      *
-     * Need to run {acceptOwnership} by the new owner.
+     * IMPORTANT: Need to run {acceptOwnership} by the new owner.
+     */
+    function _transferOwnership(address newOwner) internal {
+        require(newOwner != address(0), "Ownable: new owner is the zero address");
+
+        emit OwnershipTransferred(_owner, newOwner);
+        _newOwner = newOwner;
+    }
+
+    /**
+     * @dev Transfers ownership of the contract to a new account (`newOwner`).
      *
      * Can only be called by the current owner.
      */
@@ -302,16 +314,6 @@ contract Ownable {
 
         require(balance >= amount, "Withdraw: amount exceeds balance");
         recipient.transfer(amount);
-    }
-
-    /**
-     * @dev Transfers ownership of the contract to a new account (`newOwner`).
-     */
-    function _transferOwnership(address newOwner) internal {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-
-        emit OwnershipTransferred(_owner, newOwner);
-        _newOwner = newOwner;
     }
 }
 
