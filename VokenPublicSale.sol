@@ -717,10 +717,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
 
 
 
-
-
-
-
     /**
      * @dev Voken price in USD, by `stageIndex`.
      */
@@ -729,10 +725,37 @@ contract VokenPublicSale2 is Ownable, Pausable {
     }
 
     /**
-     * @dev USD => voken, by `usdAmount` and `stageIndex`.
+     * @dev Returns the shareholders ratio by `stageIndex`.
      */
-    function _usd2voken(uint256 usdAmount, uint16 stageIndex) private view returns (uint256) {
-        return usdAmount.mul(1000000).div(_calcVokenUsdPrice(stageIndex));
+    function _calcShareholdersRatio(uint16 stageIndex) private view returns (uint256) {
+        return SHAREHOLDERS_RATIO_START.add(SHAREHOLDERS_RATIO_DISTANCE.mul(stageIndex).div(STAGE_MAX));
+    }
+
+    /**
+     * @dev Returns the dollor cap of `stageIndex`.
+     */
+    function _stageUsdCap(uint16 stageIndex) private view returns (uint256) {
+        uint256 __usdCap = STAGE_USD_CAP_START.add(STAGE_USD_CAP_STEP.mul(stageIndex));
+
+        if (__usdCap > STAGE_USD_CAP_MAX) {
+            return STAGE_USD_CAP_MAX;
+        }
+
+        return __usdCap;
+    }
+
+    /**
+     * @dev Returns the Voken cap of `stageIndex`.
+     */
+    function _stageVokenCap(uint16 stageIndex) private view returns (uint256) {
+        return _stageUsdCap(stageIndex).mul(1000000).div(_calcVokenUsdPrice(stageIndex));
+    }
+
+    /**
+     * @dev Returns an {uint256} by `value` * _shareholdersRatio / 100000000
+     */
+    function _2shareholders(uint256 value) private view returns (uint256) {
+        value.mul(_shareholdersRatio).div(100000000);
     }
 
     /**
@@ -774,47 +797,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
     }
 
     /**
-     * @dev Returns the shareholders ratio by `stageIndex`.
-     */
-    function _calcShareholdersRatio(uint16 stageIndex) private view returns (uint256) {
-        return SHAREHOLDERS_RATIO_START.add(SHAREHOLDERS_RATIO_DISTANCE.mul(stageIndex).div(STAGE_MAX));
-    }
-
-    /**
-     * @dev Returns an {uint256} value: `input` * _shareholdersRatio / 100000000
-     */
-    function _2shareholders(uint256 input) private view returns (uint256) {
-        input.mul(_shareholdersRatio).div(100000000);
-    }
-
-    /**
-     * @dev USD => wei, for shareholders.
-     */
-    function _usd2weiShareholders(uint256 usdAmount) private view returns (uint256) {
-        return _usd2wei(usdAmount.mul(_shareholdersRatio).div(100000000));
-    }
-
-    /**
-     * @dev Returns the dollor cap of `stageIndex`.
-     */
-    function _stageUsdCap(uint16 stageIndex) private view returns (uint256) {
-        uint256 __usdCap = STAGE_USD_CAP_START.add(STAGE_USD_CAP_STEP.mul(stageIndex));
-
-        if (__usdCap > STAGE_USD_CAP_MAX) {
-            return STAGE_USD_CAP_MAX;
-        }
-
-        return __usdCap;
-    }
-
-    /**
-     * @dev Returns the Voken cap of `stageIndex`.
-     */
-    function _stageVokenCap(uint16 stageIndex) private view returns (uint256) {
-        return _usd2voken(_stageUsdCap(stageIndex), stageIndex);
-    }
-
-    /**
      * Close the current stage.
      */
     function _closeStage() private {
@@ -832,12 +814,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
         _shareholdersRatio = _calcShareholdersRatio(_stage);
     }
 
-
-
-
-
-
-
     /**
      * @dev Update audit ether price.
      */
@@ -853,28 +829,9 @@ contract VokenPublicSale2 is Ownable, Pausable {
         _TEAM = account;
     }
 
-
-
     /**
-     * @dev constructor
+     * @dev Returns current max wei value.
      */
-    constructor () public {
-        _stage = 3400;
-        _season = _seasonNumber(_stage);
-        _vokenUsdPrice = _calcVokenUsdPrice(_stage);
-        _shareholdersRatio = _calcShareholdersRatio(_stage);
-
-        _TEAM = msg.sender;
-        addProxy(msg.sender);
-    }
-
-
-
-
-
-
-
-
     function weiMax() public view returns (uint256) {
         for(uint16 i = 0; i < LIMIT_WEIS.length; i++) {
             if (_seasonLimitAccounts[_season][i].length < LIMIT_COUNTER[i]) {
@@ -885,6 +842,9 @@ contract VokenPublicSale2 is Ownable, Pausable {
         return LIMIT_WEIS[LIMIT_WEIS.length.sub(1)].sub(1);
     }
 
+    /**
+     * @dev Returns the {limitIndex} and {weiMax}.
+     */
     function _limit(uint256 weiAmount) private view returns (uint256, uint256) {
         for(uint16 i = 0; i < LIMIT_WEIS.length; i++) {
             uint256 __wei = LIMIT_WEIS[i];
@@ -904,11 +864,21 @@ contract VokenPublicSale2 is Ownable, Pausable {
 
 
 
+    /**
+     * @dev constructor
+     */
+    constructor () public {
+        _stage = 3400;
+        _season = _seasonNumber(_stage);
+        _vokenUsdPrice = _calcVokenUsdPrice(_stage);
+        _shareholdersRatio = _calcShareholdersRatio(_stage);
 
-
+        _TEAM = msg.sender;
+        addProxy(msg.sender);
+    }
 
     /**
-     * @dev Receive ETH, and send Vokens.
+     * @dev Receive ETH, and excute the exchange.
      */
     function () external payable whenNotPaused {
         require(gasleft() >= GAS_MIN, "VokenPublicSale2: Gas is not enough");
@@ -920,7 +890,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
         uint256 __usdUsed;
         uint256 __weiUsed;
         uint256 __vokenIssued;
-
 
         // Limit
         (uint256 __limitIndex, uint256 __weiMax) = _limit(msg.value);
@@ -1210,6 +1179,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
             }
         }
     }
+
 
 
 
