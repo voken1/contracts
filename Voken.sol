@@ -402,6 +402,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
 
         emit WhitelistSignUpEnabled();
         emit WhitelistSignUp(msg.sender, msg.sender);
+        emit SafeModeOn();
     }
 
     /**
