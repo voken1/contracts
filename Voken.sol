@@ -276,8 +276,8 @@ contract Ownable {
 contract Pausable is Ownable {
     bool private _paused;
 
-    event Paused(address account);
-    event Unpaused(address account);
+    event Paused();
+    event Unpaused();
 
 
     /**
@@ -311,9 +311,9 @@ contract Pausable is Ownable {
         _paused = value;
 
         if (_paused) {
-            emit Paused(msg.sender);
+            emit Paused();
         } else {
-            emit Unpaused(msg.sender);
+            emit Unpaused();
         }
     }
 }
@@ -325,6 +325,10 @@ contract Pausable is Ownable {
 contract Voken2 is Ownable, Pausable, IERC20 {
     using SafeMath256 for uint256;
     using Roles for Roles.Role;
+
+    Roles.Role private _globals;
+    Roles.Role private _proxies;
+    Roles.Role private _minters;
 
     string private _name = "Vision.Network 100G Token v2.0";
     string private _symbol = "Voken2.0";
@@ -355,10 +359,6 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         10000000    //  10 Voken for Level.15
     ];
 
-    Roles.Role private _globals;
-    Roles.Role private _proxies;
-    Roles.Role private _minters;
-
     mapping (address => uint256) private _balances;
     mapping (address => mapping (address => uint256)) private _allowances;
     mapping (address => IAllocation[]) private _allocations;
@@ -380,6 +380,8 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     event WhitelistSignUpEnabled();
     event WhitelistSignUpDisabled();
     event WhitelistSignUp(address indexed account, address indexed refereeAccount);
+    event SafeModeOn();
+    event SafeModeOff();
 
 
     /**
@@ -492,7 +494,8 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     /**
      * @dev Moves `amount` VOKEN from the caller's account to `recipient`.
      *
-     * Auto handle whitelist sign-up when `amount` is a specific value.
+     * Auto handle {WhitelistSignUp} when `amount` is a specific value.
+     * Auto handle {Burn} when `recipient` is a `address(this)` or `address(0)`.
      *
      * Returns a boolean value indicating whether the operation succeeded.
      *
@@ -523,6 +526,8 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      * @dev Moves `amount` VOKEN from `sender` to `recipient` using the
      * allowance mechanism. `amount` is then deducted from the caller's
      * allowance.
+     *
+     * Auto handle {Burn} when `recipient` is a `address(this)` or `address(0)`.
      *
      * Returns a boolean value indicating whether the operation succeeded.
      *
@@ -889,6 +894,12 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      */
     function setSafeMode(bool value) public onlyOwner {
         _safeMode = value;
+
+        if (_safeMode) {
+            emit SafeModeOn();
+        } else {
+            emit SafeModeOff();
+        }
     }
 
     /**
@@ -988,4 +999,3 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         emit MinterRemoved(account);
     }
 }
-
