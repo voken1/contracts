@@ -1143,7 +1143,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
     /**
      * @dev Returns the reserved amount of VOKEN by `account`.
      */
-    function reservedOf(address account) public view returns (uint256 __reserved) {
+    function reservedOf(address account) public view returns (uint256 reserved) {
         uint256 __len = _allocations[account].length;
         if (__len > 0) {
             uint256 __distanceDef = 240 days;
@@ -1170,10 +1170,10 @@ contract VokenPublicSale2 is Ownable, Pausable {
                     uint256 __passed = now.sub(__timestamp).div(__interval).add(1);
 
                     if (__passed >= __steps) {
-                        __reserved = __reserved.add(__allocation.amount);
+                        reserved = reserved.add(__allocation.amount);
                     }
                     else {
-                        __reserved = __reserved.add(__allocation.amount.mul(__passed).div(__steps));
+                        reserved = reserved.add(__allocation.amount.mul(__passed).div(__steps));
                     }
                 }
             }

@@ -335,10 +335,9 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     bool private _safeMode;
     bool private _whitelistingMode;
     uint256 private _whitelistCounter;
-    uint256 private _whitelistTrigger = 1001000000;     // 1001 VOKEN for sign-up trigger
-    uint256 private _whitelistRefund = 1000000;         //    1 VOKEN for success signal
-    uint256 private _whitelistRewards = 1000000000;     // 1000 VOKEN for rewards
-    uint256[15] private _whitelistRewardsArr = [
+    uint256 private _WHITELIST_TRIGGER = 1001000000;     // 1001 VOKEN for sign-up trigger
+    uint256 private _WHITELIST_REFUND = 1000000;         //    1 VOKEN for success signal
+    uint256[15] private _WHITELIST_REWARDS = [
         300000000,  // 300 Voken for Level.1
         200000000,  // 200 Voken for Level.2
         100000000,  // 100 Voken for Level.3
@@ -457,30 +456,19 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     /**
      * @dev Returns the reserved amount of VOKEN by `account`.
      */
-    function reservedOf(address account) public view returns (uint256) {
-        uint256 __reserved;
-
+    function reservedOf(address account) public view returns (uint256 reserved) {
         uint256 __len = _allocations[account].length;
         if (__len > 0) {
             for (uint256 i = 0; i < __len; i++) {
-                __reserved = __reserved.add(_allocations[account][i].reservedOf(account));
+                reserved = reserved.add(_allocations[account][i].reservedOf(account));
             }
         }
-
-        return __reserved;
-    }
-
-    /**
-     * @dev Returns the available amount of VOKEN by `account`.
-     */
-    function availableOf(address account) public view returns (uint256) {
-        return balanceOf(account).sub(reservedOf(account));
     }
 
     /**
      * @dev Returns the available amount of VOKEN by `account` and a certain `amount`.
      */
-    function _getAvailableAmount(address account, uint256 amount) internal view returns (uint256) {
+    function _getAvailableAmount(address account, uint256 amount) private view returns (uint256) {
         uint256 __available = balanceOf(account).sub(reservedOf(account));
 
         if (amount <= __available) {
@@ -512,10 +500,10 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      */
     function transfer(address recipient, uint256 amount) public whenNotPaused returns (bool) {
         // Whitelist sign-up
-        if (amount == _whitelistTrigger && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
-            _transfer(msg.sender, address(this), _whitelistTrigger);
+        if (amount == _WHITELIST_TRIGGER && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
+            _transfer(msg.sender, address(this), _WHITELIST_TRIGGER);
             _whitelist(msg.sender, recipient);
-            _distributeVokenForWhitelist(msg.sender);
+            _distributeForWhitelist(msg.sender);
         }
 
         // Burn
@@ -653,7 +641,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      *
      * Emits a {Transfer} event.
      */
-    function _transfer(address sender, address recipient, uint256 amount) internal {
+    function _transfer(address sender, address recipient, uint256 amount) private {
         require(recipient != address(0), "VOKEN: recipient is the zero address");
 
         if (_safeMode && !isGlobal(sender) && !isGlobal(recipient)) {
@@ -671,7 +659,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      * Emits a {Mint} event.
      * Emits a {Transfer} event with `from` set to the zero address.
      */
-    function _mint(address account, uint256 amount) internal {
+    function _mint(address account, uint256 amount) private {
         require(_totalSupply.add(amount) <= _cap, "VOKEN: total supply cap exceeded");
         require(account != address(0), "VOKEN: mint to the zero address");
 
@@ -688,7 +676,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      *
      * Emits a {Transfer} event with `from` set to the zero address.
      */
-    function _mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) internal {
+    function _mintWithAllocation(address account, uint256 amount, IAllocation allocationContract) private {
         require(_totalSupply.add(amount) <= _cap, "VOKEN: total supply cap exceeded");
         require(account != address(0), "VOKEN: mint to the zero address");
 
@@ -710,7 +698,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      * Emits a {Burn} event.
      * Emits a {Transfer} event with `to` set to the zero address.
      */
-    function _burn(address account, uint256 amount) internal {
+    function _burn(address account, uint256 amount) private {
         uint256 __amount = _getAvailableAmount(account, amount);
 
         _balances[account] = _balances[account].sub(__amount, "VOKEN: burn amount exceeds balance");
@@ -725,7 +713,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      *
      * Emits an {Approval} event.
      */
-    function _approve(address owner, address spender, uint256 value) internal {
+    function _approve(address owner, address spender, uint256 value) private {
         require(owner != address(0), "VOKEN: approve from the zero address");
         require(spender != address(0), "VOKEN: approve to the zero address");
         require(value <= _getAvailableAmount(spender, value), "VOKEN: approve exceeds available balance");
@@ -824,7 +812,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      *
      * Emits {WhitelistSignUp} event.
      */
-    function _whitelist(address account, address refereeAccount) internal {
+    function _whitelist(address account, address refereeAccount) private {
         require(!whitelisted(account), "Whitelist: account is already whitelisted");
         require(whitelisted(refereeAccount), "Whitelist: refereeAccount is not whitelisted");
 
@@ -836,34 +824,32 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     }
 
     /**
-     * @dev Distribute VOKEN.
+     * @dev Distribute.
      */
-    function _distributeVokenForWhitelist(address account) internal {
+    function _distributeForWhitelist(address account) private {
         uint256 __distributedAmount;
         uint256 __burnAmount;
 
-        address __cursor = account;
-        for(uint i = 0; i < _whitelistRewardsArr.length; i++) {
-            address __receiver = _referee[__cursor];
+        address __account = account;
+        for(uint i = 0; i < _WHITELIST_REWARDS.length; i++) {
+            address __referee = _referee[__account];
 
-            if (__receiver != address(0)) {
-                if (__receiver != __cursor && _referrals[__receiver].length > i) {
-                    _transfer(address(this), __receiver, _whitelistRewardsArr[i]);
-                    __distributedAmount = __distributedAmount.add(_whitelistRewardsArr[i]);
-                }
+            if (__referee != address(0) && __referee != __account && _referrals[__referee].length > i) {
+                _transfer(address(this), __referee, _WHITELIST_REWARDS[i]);
+                __distributedAmount = __distributedAmount.add(_WHITELIST_REWARDS[i]);
             }
 
-            __cursor = _referee[__cursor];
+            __account = __referee;
         }
 
         // Burn
-        __burnAmount = _whitelistRewards.sub(__distributedAmount);
+        __burnAmount = _WHITELIST_TRIGGER.sub(_WHITELIST_REFUND).sub(__distributedAmount);
         if (__burnAmount > 0) {
             _burn(address(this), __burnAmount);
         }
 
         // Transfer VOKEN refund as a success signal.
-        _transfer(address(this), account, _whitelistRefund);
+        _transfer(address(this), account, _WHITELIST_REFUND);
     }
 
 
