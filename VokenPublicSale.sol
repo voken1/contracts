@@ -420,9 +420,9 @@ contract VokenPublicSale2 is Ownable, Pausable {
     Roles.Role private _proxies;
 
     // Addresses
-    IVoken2 private _VOKEN = IVoken2(0);
+    IVoken2 private _VOKEN = IVoken2(0x8f4D9e0082CFDc2e9Db12e4B75965bc2c7F7E84e);
+    address payable private _SHAREHOLDERS = address payable(0x5265E44F4E2F1b28E748f692E0C4BaF7635B9D7A);
     address payable private _TEAM;
-    address payable private _SHAREHOLDERS = 0x726ebDf1924f72cCeA101C7De0ebe609D82F952D;
 
     // Referral rewards, 35% for 15 levels
     uint16[15] private REWARDS_PCT = [6, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1];
