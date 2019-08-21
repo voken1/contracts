@@ -475,20 +475,20 @@ contract VokenPublicSale2 is Ownable, Pausable {
     uint256 private _shareholdersRatio;
 
     // Cache
-    bool private _cacheWWhitelist;
+    bool private _cacheWhitelisted;
     uint256 private _cacheWeiShareholders;
     uint256 private _cachePending;
     uint16[] private _cacheRewards;
     address payable[] private _cacheReferees;
+
+    // Allocations
+    mapping (address => Allocations.Allocation[]) private _allocations;
 
     // Account
     mapping (address => uint256) private _accountVokenIssued;
     mapping (address => uint256) private _accountVokenBonus;
     mapping (address => uint256) private _accountWeiPurchased;
     mapping (address => uint256) private _accountWeiRewarded;
-
-    // Allocations
-    mapping (address => Allocations.Allocation[]) private _allocations;
 
     // Stage
     mapping (uint16 => uint256) private _stageUsdSold;
@@ -949,7 +949,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
         __weiUsed = _usd2wei(__usdUsed);
 
         // Whitelist
-        if (_cacheWWhitelist && __vokenIssued > 0) {
+        if (_cacheWhitelisted && __vokenIssued > 0) {
             _mintVokenBonus(__vokenIssued);
 
             for(uint16 i = 0; i < _cacheReferees.length; i++) {
@@ -1004,21 +1004,21 @@ contract VokenPublicSale2 is Ownable, Pausable {
      * @dev Cache.
      */
     function _cache() private {
-        _cacheWWhitelist = _VOKEN.whitelisted(msg.sender);
-        if (_cacheWWhitelist) {
-            address __cursor = msg.sender;
+        _cacheWhitelisted = _VOKEN.whitelisted(msg.sender);
+        if (_cacheWhitelisted) {
+            address __account = msg.sender;
             for(uint16 i = 0; i < REWARDS_PCT.length; i++) {
-                address __referee = _VOKEN.whitelistReferee(__cursor);
+                address __referee = _VOKEN.whitelistReferee(__account);
 
-                if (__referee != address(0) && __referee != __cursor && _VOKEN.whitelistReferralsCount(__referee) > i) {
+                if (__referee != address(0) && __referee != __account && _VOKEN.whitelistReferralsCount(__referee) > i) {
                     if (!_seasonHasReferral[_season][__referee]) {
                         _seasonReferrals[_season].push(__referee);
                         _seasonHasReferral[_season][__referee] = true;
                     }
 
-                    if (!_seasonAccountHasReferral[_season][__referee][__cursor]) {
-                        _seasonAccountReferrals[_season][__referee].push(__cursor);
-                        _seasonAccountHasReferral[_season][__referee][__cursor] = true;
+                    if (!_seasonAccountHasReferral[_season][__referee][__account]) {
+                        _seasonAccountReferrals[_season][__referee].push(__account);
+                        _seasonAccountHasReferral[_season][__referee][__account] = true;
                     }
 
                     _cacheReferees.push(address(uint160(__referee)));
@@ -1028,7 +1028,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
                     _cachePending.add(REWARDS_PCT[i]);
                 }
 
-                __cursor = __referee;
+                __account = __referee;
             }
         }
     }
@@ -1039,8 +1039,8 @@ contract VokenPublicSale2 is Ownable, Pausable {
     function _resetCache() private {
         delete _cacheWeiShareholders;
 
-        if (_cacheWWhitelist) {
-            delete _cacheWWhitelist;
+        if (_cacheWhitelisted) {
+            delete _cacheWhitelisted;
             delete _cacheReferees;
             delete _cacheRewards;
             delete _cachePending;
@@ -1109,7 +1109,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
         _weiSeasonAccountPurchased[_season][msg.sender] = _weiSeasonAccountPurchased[_season][msg.sender].add(__wei);
 
         // season referral account
-        if (_cacheWWhitelist) {
+        if (_cacheWhitelisted) {
             for (uint16 i = 0; i < _cacheRewards.length; i++) {
                 address __referee = _cacheReferees[i];
 
@@ -1171,17 +1171,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
         assert(_VOKEN.mintWithAllocation(msg.sender, amount, address(this)));
     }
 
-
-
-
-
-
-
-
-
-
-
-
     /**
      * @dev Returns the reserved amount of VOKEN by `account`.
      */
@@ -1214,7 +1203,6 @@ contract VokenPublicSale2 is Ownable, Pausable {
                     if (__passed >= __steps) {
                         __reserved = __reserved.add(__allocation.amount);
                     }
-
                     else {
                         __reserved = __reserved.add(__allocation.amount.mul(__passed).div(__steps));
                     }
@@ -1222,6 +1210,10 @@ contract VokenPublicSale2 is Ownable, Pausable {
             }
         }
     }
+
+
+
+
 
 
 
