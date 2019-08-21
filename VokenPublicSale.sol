@@ -383,7 +383,7 @@ interface IERC20 {
 
 
 /**
- * @title Voken2.0 interface
+ * @title Voken2.0 interface.
  */
 interface IVoken2 {
     function balanceOf(address owner) external view returns (uint256);
@@ -393,6 +393,14 @@ interface IVoken2 {
     function whitelisted(address account) external view returns (bool);
     function whitelistReferee(address account) external view returns (address payable);
     function whitelistReferralsCount(address account) external view returns (uint256);
+}
+
+
+/**
+ * @dev Interface of an allocation contract
+ */
+interface IAllocation {
+    function reservedOf(address account) external view returns (uint256);
 }
 
 
@@ -408,9 +416,17 @@ library Allocations {
 
 
 /**
+ * @title VokenShareholders interface.
+ */
+interface VokenShareholders {
+    //
+}
+
+
+/**
  * @title Voken Public Sale v2.0
  */
-contract VokenPublicSale2 is Ownable, Pausable {
+contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     using SafeMath16 for uint16;
     using SafeMath256 for uint256;
     using Roles for Roles.Role;
@@ -421,7 +437,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
 
     // Addresses
     IVoken2 private _VOKEN = IVoken2(0x8f4D9e0082CFDc2e9Db12e4B75965bc2c7F7E84e);
-    address payable private _SHAREHOLDERS = address payable(0x5265E44F4E2F1b28E748f692E0C4BaF7635B9D7A);
+    VokenShareholders private _SHAREHOLDERS = VokenShareholders(0x5265E44F4E2F1b28E748f692E0C4BaF7635B9D7A);
     address payable private _TEAM;
 
     // Referral rewards, 35% for 15 levels
@@ -487,7 +503,9 @@ contract VokenPublicSale2 is Ownable, Pausable {
     // Account
     mapping (address => uint256) private _accountVokenIssued;
     mapping (address => uint256) private _accountVokenBonus;
+    mapping (address => uint256) private _accountUsdPurchased;
     mapping (address => uint256) private _accountWeiPurchased;
+    mapping (address => uint256) private _accountUsdRewarded;
     mapping (address => uint256) private _accountWeiRewarded;
 
     // Stage
@@ -511,8 +529,10 @@ contract VokenPublicSale2 is Ownable, Pausable {
     mapping (uint16 => mapping (address => uint256)) private _vokenSeasonAccountReferral;
     mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountPurchased;
     mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountReferral;
+    mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountRewarded;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountReferral;
+    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRewarded;
 
     // Season wei limit accounts
     mapping (uint16 => mapping (uint256 => address[])) private _seasonLimitAccounts;
@@ -530,7 +550,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
     event SeasonClosed(uint16 _seasonNumber);
     event AuditEtherPriceUpdated(uint256 value, address indexed account);
 
-
+    event Log(uint256 value);
 
     /**
      * @dev Returns the VOKEN address.
@@ -542,7 +562,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
     /**
      * @dev Returns the shareholders contract address.
      */
-    function SHAREHOLDERS() public view returns (address) {
+    function SHAREHOLDERS() public view returns (VokenShareholders) {
         return _SHAREHOLDERS;
     }
 
@@ -617,11 +637,15 @@ contract VokenPublicSale2 is Ownable, Pausable {
     function queryAccount(address account) public view returns (uint256 vokenIssued,
                                                                 uint256 vokenBonus,
                                                                 uint256 weiPurchased,
-                                                                uint256 weiRewarded) {
+                                                                uint256 weiRewarded,
+                                                                uint256 usdPurchased,
+                                                                uint256 usdRewarded) {
         vokenIssued = _accountVokenIssued[account];
         vokenBonus = _accountVokenBonus[account];
         weiPurchased = _accountWeiPurchased[account];
         weiRewarded = _accountWeiRewarded[account];
+        usdPurchased = _accountUsdPurchased[account];
+        usdRewarded = _accountUsdRewarded[account];
     }
 
     /**
@@ -683,15 +707,19 @@ contract VokenPublicSale2 is Ownable, Pausable {
                                                                                         uint256 vokenReferral,
                                                                                         uint256 weiPurchased,
                                                                                         uint256 weiReferral,
+                                                                                        uint256 weiRewarded,
                                                                                         uint256 usdPurchased,
-                                                                                        uint256 usdReferral) {
+                                                                                        uint256 usdReferral,
+                                                                                        uint256 usdRewarded) {
         if (seasonNumber > 0 && seasonNumber <= SEASON_LIMIT) {
             vokenIssued = _vokenSeasonAccountIssued[seasonNumber][account];
             vokenReferral = _vokenSeasonAccountReferral[seasonNumber][account];
             weiPurchased = _weiSeasonAccountPurchased[seasonNumber][account];
             weiReferral = _weiSeasonAccountReferral[seasonNumber][account];
+            weiRewarded = _weiSeasonAccountRewarded[seasonNumber][account];
             usdPurchased = _usdSeasonAccountPurchased[seasonNumber][account];
             usdReferral = _usdSeasonAccountReferral[seasonNumber][account];
+            usdRewarded = _usdSeasonAccountRewarded[seasonNumber][account];
         }
     }
 
@@ -755,7 +783,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
      * @dev Returns an {uint256} by `value` * _shareholdersRatio / 100000000
      */
     function _2shareholders(uint256 value) private view returns (uint256) {
-        value.mul(_shareholdersRatio).div(100000000);
+        return value.mul(_shareholdersRatio).div(100000000);
     }
 
     /**
@@ -868,6 +896,8 @@ contract VokenPublicSale2 is Ownable, Pausable {
      * @dev constructor
      */
     constructor () public {
+        _etherUsdPrice = 300000000;
+
         _stage = 3400;
         _season = _seasonNumber(_stage);
         _vokenUsdPrice = _calcVokenUsdPrice(_stage);
@@ -923,15 +953,18 @@ contract VokenPublicSale2 is Ownable, Pausable {
 
             for(uint16 i = 0; i < _cacheReferees.length; i++) {
                 address payable __referee = _cacheReferees[i];
+                uint256 __usdReward = __usdUsed.mul(_cacheRewards[i]).div(100);
                 uint256 __weiReward = __weiUsed.mul(_cacheRewards[i]).div(100);
 
                 __referee.transfer(__weiReward);
+                _usdRewarded = _usdRewarded.add(__usdReward);
                 _weiRewarded = _weiRewarded.add(__weiReward);
+                _accountUsdRewarded[__referee] = _accountUsdRewarded[__referee].add(__usdReward);
                 _accountWeiRewarded[__referee] = _accountWeiRewarded[__referee].add(__weiReward);
             }
 
             if (_cachePending > 0) {
-                _weiPending = _weiPending.add(__usdUsed.mul(_cachePending).div(100));
+                _weiPending = _weiPending.add(__weiUsed.mul(_cachePending).div(100));
             }
         }
 
@@ -945,24 +978,24 @@ contract VokenPublicSale2 is Ownable, Pausable {
 
         // Counter
         if (__weiUsed > 0) {
-            // Wei for team
-            uint256 __weiTeam = _weiSold.sub(_weiRewarded).sub(_weiShareholders).sub(_weiPending).sub(_weiTeam);
-            _TEAM.transfer(__weiTeam);
-
-            // Transfer wei to SHAREHOLDERS
-            (bool __bool,) = _SHAREHOLDERS.call.value(_cacheWeiShareholders)("");
-            assert(__bool);
-
-            // Counter
             _txs = _txs.add(1);
+            _usdSold = _usdSold.add(__usdUsed);
             _weiSold = _weiSold.add(__weiUsed);
-            _weiShareholders = _weiShareholders.add(_cacheWeiShareholders);
-            _weiTeam = _weiTeam.add(__weiTeam);
-
+            _accountUsdPurchased[msg.sender] = _accountUsdPurchased[msg.sender].add(__usdUsed);
             _accountWeiPurchased[msg.sender] = _accountWeiPurchased[msg.sender].add(__weiUsed);
 
+            // Wei for SHAREHOLDERS
+            _weiShareholders = _weiShareholders.add(_cacheWeiShareholders);
+            (bool __bool,) = address(_SHAREHOLDERS).call.value(_cacheWeiShareholders)("");
+            assert(__bool);
+
+            // Wei for TEAM
+            uint256 __weiTeam = _weiSold.sub(_weiRewarded).sub(_weiShareholders).sub(_weiPending).sub(_weiTeam);
+            _weiTeam = _weiTeam.add(__weiTeam);
+            _TEAM.transfer(__weiTeam);
+
             // TODO: where
-            _seasonLimitAccounts[_season][__limitIndex].push(msg.sender);
+            // _seasonLimitAccounts[_season][__limitIndex].push(msg.sender);
         }
 
         // Reset cache
@@ -994,7 +1027,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
                     _cacheRewards.push(REWARDS_PCT[i]);
                 }
                 else {
-                    _cachePending.add(REWARDS_PCT[i]);
+                    _cachePending = _cachePending.add(REWARDS_PCT[i]);
                 }
 
                 __account = __referee;
@@ -1081,13 +1114,18 @@ contract VokenPublicSale2 is Ownable, Pausable {
         if (_cacheWhitelisted) {
             for (uint16 i = 0; i < _cacheRewards.length; i++) {
                 address __referee = _cacheReferees[i];
+                uint256 __usdReward = __usd.mul(_cacheRewards[i]).div(100);
+                uint256 __weiReward = __wei.mul(_cacheRewards[i]).div(100);
 
-                _seasonUsdRewarded[_season] = _seasonUsdRewarded[_season].add(__usd);
-                _seasonWeiRewarded[_season] = _seasonWeiRewarded[_season].add(__wei);
+                _seasonUsdRewarded[_season] = _seasonUsdRewarded[_season].add(__usdReward);
+                _seasonWeiRewarded[_season] = _seasonWeiRewarded[_season].add(__weiReward);
+                _usdSeasonAccountRewarded[_season][__referee] = _usdSeasonAccountRewarded[_season][__referee].add(__usdReward);
+                _weiSeasonAccountRewarded[_season][__referee] = _weiSeasonAccountRewarded[_season][__referee].add(__weiReward);
 
                 _usdSeasonAccountReferral[_season][__referee] = _usdSeasonAccountReferral[_season][__referee].add(__usd);
                 _weiSeasonAccountReferral[_season][__referee] = _weiSeasonAccountReferral[_season][__referee].add(__wei);
                 _vokenSeasonAccountReferral[_season][__referee] = _vokenSeasonAccountReferral[_season][__referee].add(__voken);
+
             }
         }
     }
@@ -1111,7 +1149,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
         _vokenSeasonAccountIssued[_season][msg.sender] = _vokenSeasonAccountIssued[_season][msg.sender].add(amount);
 
         // Mint
-        assert(_VOKEN.mint(msg.sender, amount));
+        // assert(_VOKEN.mint(msg.sender, amount));
     }
 
     /**
@@ -1137,7 +1175,7 @@ contract VokenPublicSale2 is Ownable, Pausable {
         __allocation.amount = amount;
         __allocation.timestamp = now;
         _allocations[msg.sender].push(__allocation);
-        assert(_VOKEN.mintWithAllocation(msg.sender, amount, address(this)));
+        // assert(_VOKEN.mintWithAllocation(msg.sender, amount, address(this)));
     }
 
     /**
