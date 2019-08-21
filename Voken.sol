@@ -336,8 +336,9 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     uint256 private _cap;
     uint256 private _totalSupply;
 
-    bool private _safeMode;
     bool private _whitelistingMode;
+    bool private _safeMode;
+    uint16 private _BURNING_PERMILL;
     uint256 private _whitelistCounter;
     uint256 private _WHITELIST_TRIGGER = 1001000000;     // 1001 VOKEN for sign-up trigger
     uint256 private _WHITELIST_REFUND = 1000000;         //    1 VOKEN for success signal
@@ -382,6 +383,8 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     event WhitelistSignUp(address indexed account, address indexed refereeAccount);
     event SafeModeOn();
     event SafeModeOff();
+    event BurningModeOn();
+    event BurningModeOff();
 
 
     /**
@@ -390,20 +393,20 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     constructor () public {
         _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
 
-        _whitelistingMode = true;
-        _safeMode = true;
-
         _referee[msg.sender] = msg.sender;
         _whitelistCounter = 1;
 
         addGlobal(address(this));
         addProxy(msg.sender);
         addMinter(msg.sender);
+        setWhitelistingMode(true);
+        setSafeMode(true);
+        setBurningMode(10);
 
-        emit WhitelistSignUpEnabled();
         emit WhitelistSignUp(msg.sender, msg.sender);
-        emit SafeModeOn();
     }
+
+
 
     /**
      * @dev Donate
@@ -505,7 +508,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
     function transfer(address recipient, uint256 amount) public whenNotPaused returns (bool) {
         // Whitelist sign-up
         if (amount == _WHITELIST_TRIGGER && _whitelistingMode && whitelisted(recipient) && !whitelisted(msg.sender)) {
-            _transfer(msg.sender, address(this), _WHITELIST_TRIGGER);
+            _move(msg.sender, address(this), _WHITELIST_TRIGGER);
             _whitelist(msg.sender, recipient);
             _distributeForWhitelist(msg.sender);
         }
@@ -653,6 +656,34 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         if (_safeMode && !isGlobal(sender) && !isGlobal(recipient)) {
             require(whitelisted(sender), "VOKEN: sender is not whitelisted");
         }
+
+        if (_BURNING_PERMILL > 0) {
+            uint256 __burning = amount.mul(_BURNING_PERMILL).div(1000);
+            uint256 __amount = amount.sub(__burning);
+
+            _balances[sender] = _balances[sender].sub(__amount);
+            _balances[recipient] = _balances[recipient].add(__amount);
+            emit Transfer(sender, recipient, __amount);
+            
+            _burn(sender, __burning);
+        }
+        
+        else {
+            _balances[sender] = _balances[sender].sub(amount);
+            _balances[recipient] = _balances[recipient].add(amount);
+            emit Transfer(sender, recipient, amount);
+        }
+    }
+
+    /**
+     * @dev Moves VOKEN `amount` from `sender` to `recipient`.
+     *
+     * May reject non-whitelist transaction.
+     *
+     * Emits a {Transfer} event.
+     */
+    function _move(address sender, address recipient, uint256 amount) private {
+        require(recipient != address(0), "VOKEN: recipient is the zero address");
 
         _balances[sender] = _balances[sender].sub(amount);
         _balances[recipient] = _balances[recipient].add(amount);
@@ -841,7 +872,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
             address __referee = _referee[__account];
 
             if (__referee != address(0) && __referee != __account && _referrals[__referee].length > i) {
-                _transfer(address(this), __referee, _WHITELIST_REWARDS[i]);
+                _move(address(this), __referee, _WHITELIST_REWARDS[i]);
                 __distributedAmount = __distributedAmount.add(_WHITELIST_REWARDS[i]);
             }
 
@@ -855,7 +886,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         }
 
         // Transfer VOKEN refund as a success signal.
-        _transfer(address(this), account, _WHITELIST_REFUND);
+        _move(address(this), account, _WHITELIST_REFUND);
     }
 
 
@@ -900,6 +931,29 @@ contract Voken2 is Ownable, Pausable, IERC20 {
             emit SafeModeOn();
         } else {
             emit SafeModeOff();
+        }
+    }
+
+    /**
+     * Returns {bool}, {value} of burning mode.
+     */
+    function burningMode() public view returns (bool, uint16) {
+        return (_BURNING_PERMILL > 0, _BURNING_PERMILL);
+    }
+
+    /**
+     * @dev Sets the burning mode by `value`.
+     */
+    function setBurningMode(uint16 value) public onlyOwner {
+        require(value <= 1000, "BurningMode: value is greater than 1000");
+        
+        if (value > 0) {
+            _BURNING_PERMILL = value;
+            emit BurningModeOn();
+        }
+        else {
+            _BURNING_PERMILL = 0;
+            emit BurningModeOff();
         }
     }
 
