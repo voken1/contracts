@@ -388,14 +388,107 @@ contract Voken2 is Ownable, Pausable, IERC20 {
 
 
     /**
+     * @dev Returns true if the `account` has the Global role
+     */
+    function isGlobal(address account) public view returns (bool) {
+        return _globals.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Global role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addGlobal(address account) public onlyOwner {
+        _globals.add(account);
+        emit GlobalAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Global role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeGlobal(address account) public onlyOwner {
+        _globals.remove(account);
+        emit GlobalRemoved(account);
+    }
+
+    /**
+     * @dev Throws if called by account which is not a proxy.
+     */
+    modifier onlyProxy() {
+        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
+        _;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Proxy role.
+     */
+    function isProxy(address account) public view returns (bool) {
+        return _proxies.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addProxy(address account) public onlyOwner {
+        _proxies.add(account);
+        emit ProxyAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeProxy(address account) public onlyOwner {
+        _proxies.remove(account);
+        emit ProxyRemoved(account);
+    }
+
+    /**
+     * @dev Throws if called by account which is not a minter.
+     */
+    modifier onlyMinter() {
+        require(isMinter(msg.sender), "MinterRole: caller does not have the Minter role");
+        _;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Minter role
+     */
+    function isMinter(address account) public view returns (bool) {
+        return _minters.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Minter role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addMinter(address account) public onlyOwner {
+        _minters.add(account);
+        emit MinterAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Minter role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeMinter(address account) public onlyOwner {
+        _minters.remove(account);
+        emit MinterRemoved(account);
+    }
+
+
+    /**
      * @dev Constructor
      */
     constructor () public {
-        _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
-
-        _referee[msg.sender] = msg.sender;
-        _whitelistCounter = 1;
-
         addGlobal(address(this));
         addProxy(msg.sender);
         addMinter(msg.sender);
@@ -403,10 +496,12 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         setSafeMode(true);
         setBurningMode(10);
 
+        _cap = 35000000000000000;   // 35 billion cap, that is 35000000000.000000
+
+        _whitelistCounter = 1;
+        _referee[msg.sender] = msg.sender;
         emit WhitelistSignUp(msg.sender, msg.sender);
     }
-
-
 
     /**
      * @dev Donate
@@ -664,10 +759,10 @@ contract Voken2 is Ownable, Pausable, IERC20 {
             _balances[sender] = _balances[sender].sub(__amount);
             _balances[recipient] = _balances[recipient].add(__amount);
             emit Transfer(sender, recipient, __amount);
-            
+
             _burn(sender, __burning);
         }
-        
+
         else {
             _balances[sender] = _balances[sender].sub(amount);
             _balances[recipient] = _balances[recipient].add(amount);
@@ -758,14 +853,6 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         _allowances[owner][spender] = value;
         emit Approval(owner, spender, value);
     }
-
-
-
-
-
-
-
-
 
     /**
      * @dev Sets the full name of VOKEN.
@@ -889,14 +976,6 @@ contract Voken2 is Ownable, Pausable, IERC20 {
         _move(address(this), account, _WHITELIST_REFUND);
     }
 
-
-
-
-
-
-
-
-
     /**
      * @dev Enable/disable sign-up for whitelist.
      *
@@ -946,7 +1025,7 @@ contract Voken2 is Ownable, Pausable, IERC20 {
      */
     function setBurningMode(uint16 value) public onlyOwner {
         require(value <= 1000, "BurningMode: value is greater than 1000");
-        
+
         if (value > 0) {
             _BURNING_PERMILL = value;
             emit BurningModeOn();
@@ -955,102 +1034,5 @@ contract Voken2 is Ownable, Pausable, IERC20 {
             _BURNING_PERMILL = 0;
             emit BurningModeOff();
         }
-    }
-
-    /**
-     * @dev Returns true if the `account` has the Global role
-     */
-    function isGlobal(address account) public view returns (bool) {
-        return _globals.has(account);
-    }
-
-    /**
-     * @dev Give an `account` access to the Global role.
-     *
-     * Can only be called by the current owner.
-     */
-    function addGlobal(address account) public onlyOwner {
-        _globals.add(account);
-        emit GlobalAdded(account);
-    }
-
-    /**
-     * @dev Remove an `account` access from the Global role.
-     *
-     * Can only be called by the current owner.
-     */
-    function removeGlobal(address account) public onlyOwner {
-        _globals.remove(account);
-        emit GlobalRemoved(account);
-    }
-
-    /**
-     * @dev Throws if called by account which is not a proxy.
-     */
-    modifier onlyProxy() {
-        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
-        _;
-    }
-
-    /**
-     * @dev Returns true if the `account` has the Proxy role.
-     */
-    function isProxy(address account) public view returns (bool) {
-        return _proxies.has(account);
-    }
-
-    /**
-     * @dev Give an `account` access to the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function addProxy(address account) public onlyOwner {
-        _proxies.add(account);
-        emit ProxyAdded(account);
-    }
-
-    /**
-     * @dev Remove an `account` access from the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function removeProxy(address account) public onlyOwner {
-        _proxies.remove(account);
-        emit ProxyRemoved(account);
-    }
-
-    /**
-     * @dev Throws if called by account which is not a minter.
-     */
-    modifier onlyMinter() {
-        require(isMinter(msg.sender), "MinterRole: caller does not have the Minter role");
-        _;
-    }
-
-    /**
-     * @dev Returns true if the `account` has the Minter role
-     */
-    function isMinter(address account) public view returns (bool) {
-        return _minters.has(account);
-    }
-
-    /**
-     * @dev Give an `account` access to the Minter role.
-     *
-     * Can only be called by the current owner.
-     */
-    function addMinter(address account) public onlyOwner {
-        _minters.add(account);
-        emit MinterAdded(account);
-    }
-
-    /**
-     * @dev Remove an `account` access from the Minter role.
-     *
-     * Can only be called by the current owner.
-     */
-    function removeMinter(address account) public onlyOwner {
-        _minters.remove(account);
-        emit MinterRemoved(account);
     }
 }

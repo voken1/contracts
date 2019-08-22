@@ -285,7 +285,7 @@ contract VokenShareholders is Ownable, IAllocation {
     using SafeMath256 for uint256;
     using Roles for Roles.Role;
 
-    IVoken2 private _VOKEN = IVoken2(0x8f4D9e0082CFDc2e9Db12e4B75965bc2c7F7E84e);
+    IVoken2 private _VOKEN = IVoken2(0xFfFAb974088Bd5bF3d7E6F522e93Dd7861264cDB);
     Roles.Role private _proxies;
 
     uint256 private _ALLOCATION_TIMESTAMP = 1598918399; // Sun, 30 Aug 2020 23:59:59 +0000
@@ -316,6 +316,41 @@ contract VokenShareholders is Ownable, IAllocation {
     event ProxyRemoved(address indexed account);
     event Dividend(address indexed account, uint256 amount, uint256 page);
 
+
+    /**
+     * @dev Throws if called by account which is not a proxy.
+     */
+    modifier onlyProxy() {
+        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
+        _;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Proxy role.
+     */
+    function isProxy(address account) public view returns (bool) {
+        return _proxies.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addProxy(address account) public onlyOwner {
+        _proxies.add(account);
+        emit ProxyAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeProxy(address account) public onlyOwner {
+        _proxies.remove(account);
+        emit ProxyRemoved(account);
+    }
 
     /**
      * @dev Returns the VOKEN main contract address.
@@ -477,24 +512,19 @@ contract VokenShareholders is Ownable, IAllocation {
      * @dev Returns the reserved amount of VOKENs by `account`.
      */
     function reservedOf(address account) public view returns (uint256 reserved) {
-        if (_allocations[account] > 0 && now > _ALLOCATION_TIMESTAMP) {
+        reserved = _allocations[account];
+
+        if (now > _ALLOCATION_TIMESTAMP && reserved > 0) {
             uint256 __passed = now.sub(_ALLOCATION_TIMESTAMP).div(_ALLOCATION_INTERVAL).add(1);
 
-            if (__passed >= _ALLOCATION_STEPS) {
-                reserved = _allocations[account];
+            if (__passed > _ALLOCATION_STEPS) {
+                reserved = 0;
             }
             else {
-                reserved = _allocations[account].mul(__passed).div(_ALLOCATION_STEPS);
+                reserved = reserved.sub(reserved.mul(__passed).div(_ALLOCATION_STEPS));
             }
         }
     }
-
-
-
-
-
-
-
 
 
     /**
@@ -584,48 +614,5 @@ contract VokenShareholders is Ownable, IAllocation {
         }
 
         assert(true);
-    }
-
-
-
-
-
-
-
-
-
-    /**
-     * @dev Throws if called by account which is not a proxy.
-     */
-    modifier onlyProxy() {
-        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
-        _;
-    }
-
-    /**
-     * @dev Returns true if the `account` has the Proxy role.
-     */
-    function isProxy(address account) public view returns (bool) {
-        return _proxies.has(account);
-    }
-
-    /**
-     * @dev Give an `account` access to the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function addProxy(address account) public onlyOwner {
-        _proxies.add(account);
-        emit ProxyAdded(account);
-    }
-
-    /**
-     * @dev Remove an `account` access from the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function removeProxy(address account) public onlyOwner {
-        _proxies.remove(account);
-        emit ProxyRemoved(account);
     }
 }

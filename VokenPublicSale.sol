@@ -1,6 +1,6 @@
 pragma solidity ^0.5.11;
 
-// Public-Sale for Voken2.0
+// Public-Sale for #3277-12000 stage of Voken2.0
 //
 // More info:
 //   https://vision.network
@@ -436,20 +436,20 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     Roles.Role private _proxies;
 
     // Addresses
-    IVoken2 private _VOKEN = IVoken2(0x8f4D9e0082CFDc2e9Db12e4B75965bc2c7F7E84e);
-    VokenShareholders private _SHAREHOLDERS = VokenShareholders(0x5265E44F4E2F1b28E748f692E0C4BaF7635B9D7A);
+    IVoken2 private _VOKEN = IVoken2(0xFfFAb974088Bd5bF3d7E6F522e93Dd7861264cDB);
+    VokenShareholders private _SHAREHOLDERS = VokenShareholders(0x7712F76D2A52141D44461CDbC8b660506DCAB752);
     address payable private _TEAM;
 
     // Referral rewards, 35% for 15 levels
     uint16[15] private REWARDS_PCT = [6, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
     // Limit
-    uint16[] private LIMIT_COUNTER = [1, 3, 10, 50, 100, 300, 500];
-    uint256[] private LIMIT_WEIS = [100 ether, 50 ether, 40 ether, 30 ether, 20 ether, 10 ether, 3 ether];
+    uint16[] private LIMIT_COUNTER = [1, 1, 10, 50, 100, 200, 300];
+    uint256[] private LIMIT_WEIS = [100 ether, 50 ether, 40 ether, 30 ether, 20 ether, 10 ether, 5 ether];
+    uint256 private LIMIT_WEI_MIN = 3 ether;
 
-    // Wei & Gas
-    uint24 private GAS_MIN = 3000000;       // 3.0 Mwei gas Mininum
-    uint24 private GAS_EX = 1500000;        // 1.5 Mwei gas for ex
+    // 6,000 000 gas mininum
+    uint24 private GAS_MIN = 6000000;
 
     // Price
     uint256 private VOKEN_USD_PRICE_START = 1000;       // $      0.00100 USD
@@ -481,7 +481,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     uint256 private _weiRewarded;
     uint256 private _weiShareholders;
     uint256 private _weiTeam;
-    uint256 private _weiPending;
+    uint256 private _weiPended;
     uint256 private _usdSold;
     uint256 private _usdRewarded;
 
@@ -493,7 +493,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     // Cache
     bool private _cacheWhitelisted;
     uint256 private _cacheWeiShareholders;
-    uint256 private _cachePending;
+    uint256 private _cachePended;
     uint16[] private _cacheRewards;
     address payable[] private _cacheReferees;
 
@@ -503,6 +503,8 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     // Account
     mapping (address => uint256) private _accountVokenIssued;
     mapping (address => uint256) private _accountVokenBonus;
+    mapping (address => uint256) private _accountVokenReferral;
+    mapping (address => uint256) private _accountVokenReferrals;
     mapping (address => uint256) private _accountUsdPurchased;
     mapping (address => uint256) private _accountWeiPurchased;
     mapping (address => uint256) private _accountUsdRewarded;
@@ -517,6 +519,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     mapping (uint16 => uint256) private _seasonWeiSold;
     mapping (uint16 => uint256) private _seasonWeiRewarded;
     mapping (uint16 => uint256) private _seasonWeiShareholders;
+    mapping (uint16 => uint256) private _seasonWeiPended;
     mapping (uint16 => uint256) private _seasonUsdSold;
     mapping (uint16 => uint256) private _seasonUsdRewarded;
     mapping (uint16 => uint256) private _seasonUsdShareholders;
@@ -527,18 +530,22 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     mapping (uint16 => mapping (address => uint256)) private _vokenSeasonAccountIssued;
     mapping (uint16 => mapping (address => uint256)) private _vokenSeasonAccountBonus;
     mapping (uint16 => mapping (address => uint256)) private _vokenSeasonAccountReferral;
+    mapping (uint16 => mapping (address => uint256)) private _vokenSeasonAccountReferrals;
     mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountPurchased;
-    mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountReferral;
+    mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountReferrals;
     mapping (uint16 => mapping (address => uint256)) private _weiSeasonAccountRewarded;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountPurchased;
-    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountReferral;
+    mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountReferrals;
     mapping (uint16 => mapping (address => uint256)) private _usdSeasonAccountRewarded;
 
     // Season wei limit accounts
     mapping (uint16 => mapping (uint256 => address[])) private _seasonLimitAccounts;
+    mapping (uint16 => address[]) private _seasonLimitWeiMinAccounts;
 
     // Referrals
+    mapping (uint16 => address[]) private _seasonAccounts;
     mapping (uint16 => address[]) private _seasonReferrals;
+    mapping (uint16 => mapping (address => bool)) private _seasonHasAccount;
     mapping (uint16 => mapping (address => bool)) private _seasonHasReferral;
     mapping (uint16 => mapping (address => address[])) private _seasonAccountReferrals;
     mapping (uint16 => mapping (address => mapping (address => bool))) private _seasonAccountHasReferral;
@@ -551,6 +558,41 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     event AuditEtherPriceUpdated(uint256 value, address indexed account);
 
     event Log(uint256 value);
+
+    /**
+     * @dev Throws if called by account which is not a proxy.
+     */
+    modifier onlyProxy() {
+        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
+        _;
+    }
+
+    /**
+     * @dev Returns true if the `account` has the Proxy role.
+     */
+    function isProxy(address account) public view returns (bool) {
+        return _proxies.has(account);
+    }
+
+    /**
+     * @dev Give an `account` access to the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function addProxy(address account) public onlyOwner {
+        _proxies.add(account);
+        emit ProxyAdded(account);
+    }
+
+    /**
+     * @dev Remove an `account` access from the Proxy role.
+     *
+     * Can only be called by the current owner.
+     */
+    function removeProxy(address account) public onlyOwner {
+        _proxies.remove(account);
+        emit ProxyRemoved(account);
+    }
 
     /**
      * @dev Returns the VOKEN address.
@@ -604,7 +646,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
                                        uint256 weiRewarded,
                                        uint256 weiShareholders,
                                        uint256 weiTeam,
-                                       uint256 weiPending,
+                                       uint256 weiPended,
                                        uint256 usdSold,
                                        uint256 usdRewarded) {
         vokenIssued = _vokenIssued;
@@ -614,10 +656,10 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         weiRewarded = _weiRewarded;
         weiShareholders = _weiShareholders;
         weiTeam = _weiTeam;
-        weiPending = _weiPending;
+        weiPended = _weiPended;
 
         usdSold = _usdSold;
-        usdRewarded = usdRewarded;
+        usdRewarded = _usdRewarded;
     }
 
     /**
@@ -636,12 +678,16 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
      */
     function queryAccount(address account) public view returns (uint256 vokenIssued,
                                                                 uint256 vokenBonus,
+                                                                uint256 vokenReferral,
+                                                                uint256 vokenReferrals,
                                                                 uint256 weiPurchased,
                                                                 uint256 weiRewarded,
                                                                 uint256 usdPurchased,
                                                                 uint256 usdRewarded) {
         vokenIssued = _accountVokenIssued[account];
         vokenBonus = _accountVokenBonus[account];
+        vokenReferral = _accountVokenReferral[account];
+        vokenReferrals = _accountVokenReferrals[account];
         weiPurchased = _accountWeiPurchased[account];
         weiRewarded = _accountWeiRewarded[account];
         usdPurchased = _accountUsdPurchased[account];
@@ -683,6 +729,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
                                                               uint256 weiSold,
                                                               uint256 weiRewarded,
                                                               uint256 weiShareholders,
+                                                              uint256 weiPended,
                                                               uint256 usdSold,
                                                               uint256 usdRewarded,
                                                               uint256 usdShareholders) {
@@ -693,6 +740,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
             weiSold = _seasonWeiSold[seasonNumber];
             weiRewarded = _seasonWeiRewarded[seasonNumber];
             weiShareholders = _seasonWeiShareholders[seasonNumber];
+            weiPended = _seasonWeiPended[seasonNumber];
 
             usdSold = _seasonUsdSold[seasonNumber];
             usdRewarded = _seasonUsdRewarded[seasonNumber];
@@ -704,21 +752,25 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
      * @dev Returns the `account` data of #`seasonNumber` season.
      */
     function accountInSeason(address account, uint16 seasonNumber) public view returns (uint256 vokenIssued,
+                                                                                        uint256 vokenBonus,
                                                                                         uint256 vokenReferral,
+                                                                                        uint256 vokenReferrals,
                                                                                         uint256 weiPurchased,
-                                                                                        uint256 weiReferral,
+                                                                                        uint256 weiReferrals,
                                                                                         uint256 weiRewarded,
                                                                                         uint256 usdPurchased,
-                                                                                        uint256 usdReferral,
+                                                                                        uint256 usdReferrals,
                                                                                         uint256 usdRewarded) {
         if (seasonNumber > 0 && seasonNumber <= SEASON_LIMIT) {
             vokenIssued = _vokenSeasonAccountIssued[seasonNumber][account];
+            vokenBonus = _vokenSeasonAccountBonus[seasonNumber][account];
             vokenReferral = _vokenSeasonAccountReferral[seasonNumber][account];
+            vokenReferrals = _vokenSeasonAccountReferrals[seasonNumber][account];
             weiPurchased = _weiSeasonAccountPurchased[seasonNumber][account];
-            weiReferral = _weiSeasonAccountReferral[seasonNumber][account];
+            weiReferrals = _weiSeasonAccountReferrals[seasonNumber][account];
             weiRewarded = _weiSeasonAccountRewarded[seasonNumber][account];
             usdPurchased = _usdSeasonAccountPurchased[seasonNumber][account];
-            usdReferral = _usdSeasonAccountReferral[seasonNumber][account];
+            usdReferrals = _usdSeasonAccountReferrals[seasonNumber][account];
             usdRewarded = _usdSeasonAccountRewarded[seasonNumber][account];
         }
     }
@@ -867,38 +919,72 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
             }
         }
 
-        return LIMIT_WEIS[LIMIT_WEIS.length.sub(1)].sub(1);
+        return LIMIT_WEI_MIN;
     }
 
     /**
      * @dev Returns the {limitIndex} and {weiMax}.
      */
-    function _limit(uint256 weiAmount) private view returns (uint256, uint256) {
+    function _limit(uint256 weiAmount) private view returns (uint256 __wei) {
+        uint256 __purchased = _weiSeasonAccountPurchased[_season][msg.sender];
         for(uint16 i = 0; i < LIMIT_WEIS.length; i++) {
-            uint256 __wei = LIMIT_WEIS[i];
-            if (weiAmount >= __wei && _seasonLimitAccounts[_season][i].length < LIMIT_COUNTER[i]) {
-                return (i, __wei);
+            if (__purchased >= LIMIT_WEIS[i]) {
+                return 0;
+            }
+
+            if (__purchased < LIMIT_WEIS[i]) {
+                __wei = LIMIT_WEIS[i].sub(__purchased);
+                if (weiAmount >= __wei && _seasonLimitAccounts[_season][i].length < LIMIT_COUNTER[i]) {
+                    return __wei;
+                }
             }
         }
 
-        return (0, LIMIT_WEIS[LIMIT_WEIS.length.sub(1)].sub(1));
+        if (__purchased < LIMIT_WEI_MIN) {
+            return LIMIT_WEI_MIN.sub(__purchased);
+        }
     }
 
+    /**
+     * @dev Updates the season limit accounts, or wei min accounts.
+     */
+    function _updateSeasonLimits() private {
+        uint256 __purchased = _weiSeasonAccountPurchased[_season][msg.sender];
+        if (__purchased > LIMIT_WEI_MIN) {
+            for(uint16 i = 0; i < LIMIT_WEIS.length; i++) {
+                if (__purchased >= LIMIT_WEIS[i]) {
+                    _seasonLimitAccounts[_season][i].push(msg.sender);
+                    return;
+                }
+            }
+        }
 
+        else if (__purchased == LIMIT_WEI_MIN) {
+            _seasonLimitWeiMinAccounts[_season].push(msg.sender);
+            return;
+        }
+    }
 
+    /**
+     * @dev Returns the accounts of wei limit, by `seasonNumber` and `limitIndex`.
+     */
+    function seasonLimitAccounts(uint16 seasonNumber, uint16 limitIndex) public view returns (uint256 weis, address[] memory accounts) {
+        if (limitIndex < LIMIT_WEIS.length) {
+            weis = LIMIT_WEIS[limitIndex];
+            accounts = _seasonLimitAccounts[seasonNumber][limitIndex];
+        }
 
-
-
-
-
+        else {
+            weis = LIMIT_WEI_MIN;
+            accounts = _seasonLimitWeiMinAccounts[seasonNumber];
+        }
+    }
 
     /**
      * @dev constructor
      */
     constructor () public {
-        _etherUsdPrice = 300000000;
-
-        _stage = 3400;
+        _stage = 3277;
         _season = _seasonNumber(_stage);
         _vokenUsdPrice = _calcVokenUsdPrice(_stage);
         _shareholdersRatio = _calcShareholdersRatio(_stage);
@@ -911,7 +997,6 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
      * @dev Receive ETH, and excute the exchange.
      */
     function () external payable whenNotPaused {
-        require(gasleft() >= GAS_MIN, "VokenPublicSale2: Gas is not enough");
         require(_etherUsdPrice > 0, "VokenPublicSale2: Audit ETH price is zero");
         require(_stage <= STAGE_MAX, "VokenPublicSale2: Voken Public-Sale Completled");
 
@@ -922,7 +1007,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         uint256 __voken;
 
         // Limit
-        (uint256 __limitIndex, uint256 __weiMax) = _limit(msg.value);
+        uint256 __weiMax = _limit(msg.value);
         if (__weiMax < msg.value) {
             __usdAmount = _wei2usd(__weiMax);
         }
@@ -932,80 +1017,84 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
 
         __usdRemain = __usdAmount;
 
-        // cache
-        _cache();
-
-        // USD => Voken
-        while (gasleft() > GAS_EX && __usdRemain > 0 && _stage <= STAGE_LIMIT) {
-            uint256 __txVokenIssued;
-            (__txVokenIssued, __usdRemain) = _tx(__usdRemain);
-
-            __voken = __voken.add(__txVokenIssued);
-        }
-
-        // Used
-        __usdUsed = __usdAmount.sub(__usdRemain);
-        __weiUsed = _usd2wei(__usdUsed);
-
-        // Whitelist
-        if (_cacheWhitelisted && __voken > 0) {
-            _mintVokenBonus(__voken);
-
-            for(uint16 i = 0; i < _cacheReferees.length; i++) {
-                address payable __referee = _cacheReferees[i];
-                uint256 __usdReward = __usdUsed.mul(_cacheRewards[i]).div(100);
-                uint256 __weiReward = __weiUsed.mul(_cacheRewards[i]).div(100);
-
-                __referee.transfer(__weiReward);
-                _usdRewarded = _usdRewarded.add(__usdReward);
-                _weiRewarded = _weiRewarded.add(__weiReward);
-                _accountUsdRewarded[__referee] = _accountUsdRewarded[__referee].add(__usdReward);
-                _accountWeiRewarded[__referee] = _accountWeiRewarded[__referee].add(__weiReward);
-            }
-
-            if (_cachePending > 0) {
-                _weiPending = _weiPending.add(__weiUsed.mul(_cachePending).div(100));
-            }
-        }
-
-        // If usd/wei remains, refund.
         if (__usdRemain > 0) {
-            uint256 __weiRemain = msg.value.sub(__weiUsed);
-            if (__weiRemain > 0) {
-                msg.sender.transfer(__weiRemain);
+            // cache
+            _cache();
+
+            // USD => Voken
+            while (gasleft() > GAS_MIN && __usdRemain > 0 && _stage <= STAGE_LIMIT) {
+                uint256 __txVokenIssued;
+                (__txVokenIssued, __usdRemain) = _tx(__usdRemain);
+                __voken = __voken.add(__txVokenIssued);
             }
+
+            // Used
+            __usdUsed = __usdAmount.sub(__usdRemain);
+            __weiUsed = _usd2wei(__usdUsed);
+
+            // Whitelist
+            if (_cacheWhitelisted && __voken > 0) {
+                _mintVokenBonus(__voken);
+
+                for(uint16 i = 0; i < _cacheReferees.length; i++) {
+                    address payable __referee = _cacheReferees[i];
+                    uint256 __usdReward = __usdUsed.mul(_cacheRewards[i]).div(100);
+                    uint256 __weiReward = __weiUsed.mul(_cacheRewards[i]).div(100);
+
+                    __referee.transfer(__weiReward);
+                    _usdRewarded = _usdRewarded.add(__usdReward);
+                    _weiRewarded = _weiRewarded.add(__weiReward);
+                    _accountUsdRewarded[__referee] = _accountUsdRewarded[__referee].add(__usdReward);
+                    _accountWeiRewarded[__referee] = _accountWeiRewarded[__referee].add(__weiReward);
+                }
+
+                if (_cachePended > 0) {
+                    _weiPended = _weiPended.add(__weiUsed.mul(_cachePended).div(100));
+                }
+            }
+
+            // Counter
+            if (__weiUsed > 0) {
+                _txs = _txs.add(1);
+                _usdSold = _usdSold.add(__usdUsed);
+                _weiSold = _weiSold.add(__weiUsed);
+                _accountUsdPurchased[msg.sender] = _accountUsdPurchased[msg.sender].add(__usdUsed);
+                _accountWeiPurchased[msg.sender] = _accountWeiPurchased[msg.sender].add(__weiUsed);
+
+                // Wei for SHAREHOLDERS
+                _weiShareholders = _weiShareholders.add(_cacheWeiShareholders);
+                (bool __bool,) = address(_SHAREHOLDERS).call.value(_cacheWeiShareholders)("");
+                assert(__bool);
+
+                // Wei for TEAM
+                uint256 __weiTeam = _weiSold.sub(_weiRewarded).sub(_weiShareholders).sub(_weiPended).sub(_weiTeam);
+                _weiTeam = _weiTeam.add(__weiTeam);
+                _TEAM.transfer(__weiTeam);
+
+                // Update season limits
+                _updateSeasonLimits();
+            }
+
+            // Reset cache
+            _resetCache();
         }
 
-        // Counter
-        if (__weiUsed > 0) {
-            _txs = _txs.add(1);
-            _usdSold = _usdSold.add(__usdUsed);
-            _weiSold = _weiSold.add(__weiUsed);
-            _accountUsdPurchased[msg.sender] = _accountUsdPurchased[msg.sender].add(__usdUsed);
-            _accountWeiPurchased[msg.sender] = _accountWeiPurchased[msg.sender].add(__weiUsed);
-
-            // Wei for SHAREHOLDERS
-            _weiShareholders = _weiShareholders.add(_cacheWeiShareholders);
-            (bool __bool,) = address(_SHAREHOLDERS).call.value(_cacheWeiShareholders)("");
-            assert(__bool);
-
-            // Wei for TEAM
-            uint256 __weiTeam = _weiSold.sub(_weiRewarded).sub(_weiShareholders).sub(_weiPending).sub(_weiTeam);
-            _weiTeam = _weiTeam.add(__weiTeam);
-            _TEAM.transfer(__weiTeam);
-
-            // TODO: where
-            // _seasonLimitAccounts[_season][__limitIndex].push(msg.sender);
+        // If wei remains, refund.
+        uint256 __weiRemain = msg.value.sub(__weiUsed);
+        if (__weiRemain > 0) {
+            msg.sender.transfer(__weiRemain);
         }
-
-        // Reset cache
-        _resetCache();
     }
 
     /**
      * @dev Cache.
      */
     function _cache() private {
+        if (!_seasonHasAccount[_season][msg.sender]) {
+            _seasonAccounts[_season].push(msg.sender);
+            _seasonHasAccount[_season][msg.sender] = true;
+        }
+
         _cacheWhitelisted = _VOKEN.whitelisted(msg.sender);
         if (_cacheWhitelisted) {
             address __account = msg.sender;
@@ -1027,7 +1116,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
                     _cacheRewards.push(REWARDS_PCT[i]);
                 }
                 else {
-                    _cachePending = _cachePending.add(REWARDS_PCT[i]);
+                    _cachePended = _cachePended.add(REWARDS_PCT[i]);
                 }
 
                 __account = __referee;
@@ -1045,7 +1134,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
             delete _cacheWhitelisted;
             delete _cacheReferees;
             delete _cacheRewards;
-            delete _cachePending;
+            delete _cachePended;
         }
     }
 
@@ -1092,12 +1181,17 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         uint256 __usdShareholders = _2shareholders(__usd);
         uint256 __weiShareholders = _usd2wei(__usdShareholders);
 
-        // Stage: usd, ignore wei
+        // Stage: usd
         _stageUsdSold[_stage] = _stageUsdSold[_stage].add(__usd);
 
         // Season: usd, wei
         _seasonUsdSold[_season] = _seasonUsdSold[_season].add(__usd);
         _seasonWeiSold[_season] = _seasonWeiSold[_season].add(__wei);
+
+        // Season: wei pended
+        if (_cachePended > 0) {
+            _seasonWeiPended[_season] = _seasonWeiPended[_season].add(__wei.mul(_cachePended).div(100));
+        }
 
         // Season shareholders: usd, wei
         _seasonUsdShareholders[_season] = _seasonUsdShareholders[_season].add(__usdShareholders);
@@ -1117,15 +1211,23 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
                 uint256 __usdReward = __usd.mul(_cacheRewards[i]).div(100);
                 uint256 __weiReward = __wei.mul(_cacheRewards[i]).div(100);
 
+                // season
                 _seasonUsdRewarded[_season] = _seasonUsdRewarded[_season].add(__usdReward);
                 _seasonWeiRewarded[_season] = _seasonWeiRewarded[_season].add(__weiReward);
+
+                // season => account
                 _usdSeasonAccountRewarded[_season][__referee] = _usdSeasonAccountRewarded[_season][__referee].add(__usdReward);
                 _weiSeasonAccountRewarded[_season][__referee] = _weiSeasonAccountRewarded[_season][__referee].add(__weiReward);
+                _usdSeasonAccountReferrals[_season][__referee] = _usdSeasonAccountReferrals[_season][__referee].add(__usd);
+                _weiSeasonAccountReferrals[_season][__referee] = _weiSeasonAccountReferrals[_season][__referee].add(__wei);
 
-                _usdSeasonAccountReferral[_season][__referee] = _usdSeasonAccountReferral[_season][__referee].add(__usd);
-                _weiSeasonAccountReferral[_season][__referee] = _weiSeasonAccountReferral[_season][__referee].add(__wei);
-                _vokenSeasonAccountReferral[_season][__referee] = _vokenSeasonAccountReferral[_season][__referee].add(__voken);
+                _vokenSeasonAccountReferrals[_season][__referee] = _vokenSeasonAccountReferrals[_season][__referee].add(__voken);
+                _accountVokenReferrals[__referee] = _accountVokenReferrals[__referee].add(__voken);
 
+                if (i == 0) {
+                    _vokenSeasonAccountReferral[_season][__referee] = _vokenSeasonAccountReferral[_season][__referee].add(__voken);
+                    _accountVokenReferral[__referee] = _accountVokenReferral[__referee].add(__voken);
+                }
             }
         }
     }
@@ -1149,7 +1251,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         _vokenSeasonAccountIssued[_season][msg.sender] = _vokenSeasonAccountIssued[_season][msg.sender].add(amount);
 
         // Mint
-        // assert(_VOKEN.mint(msg.sender, amount));
+        assert(_VOKEN.mint(msg.sender, amount));
     }
 
     /**
@@ -1175,89 +1277,83 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         __allocation.amount = amount;
         __allocation.timestamp = now;
         _allocations[msg.sender].push(__allocation);
-        // assert(_VOKEN.mintWithAllocation(msg.sender, amount, address(this)));
+        assert(_VOKEN.mintWithAllocation(msg.sender, amount, address(this)));
     }
 
     /**
      * @dev Returns the reserved amount of VOKEN by `account`.
      */
-    function reservedOf(address account) public view returns (uint256 reserved) {
-        uint256 __len = _allocations[account].length;
+    function reservedOf(address account) public view returns (uint256) {
+        Allocations.Allocation[] memory __allocations = _allocations[account];
+
+        uint256 __len = __allocations.length;
         if (__len > 0) {
-            uint256 __distanceDef = 240 days;
-            uint256 __distanceMin = 90 days;
-            uint256 __distanceStep = 30 days;
-            uint256 __interval = 1 days;
-            uint8 __steps = 30;
+            uint256 __vokenIssued = _accountVokenIssued[account];
+            uint256 __vokenBonus = _accountVokenBonus[account];
+            uint256 __vokenReferral = _accountVokenReferral[account];
             uint256 __vokenBalance = _VOKEN.balanceOf(account);
 
+            // balance fixed, by Voken issued.
+            if (__vokenIssued < __vokenBalance) {
+                __vokenBalance = __vokenBalance.sub(__vokenIssued);
+            }
+            else {
+                __vokenBalance = 0;
+            }
+
+            // balance fixed, by Voken bonus.
+            if (__vokenBonus < __vokenBalance) {
+                __vokenBalance = __vokenBalance.sub(__vokenBonus);
+            }
+            else {
+                __vokenBalance = 0;
+            }
+
+            uint256 __reserved;
             for (uint256 i = 0; i < __len; i++) {
-                Allocations.Allocation memory __allocation = _allocations[account][i];
-                uint256 __distance = __distanceDef;
+                // Voken reserved.
+                Allocations.Allocation memory __allocation = __allocations[i];
+                __reserved = __reserved.add(__allocation.amount);
+                if (now >= __allocation.timestamp.add(90 days)) {
+                    // default: 180 days.
+                    uint256 __distance = 180 days;
 
-                if (__vokenBalance >= __allocation.amount) {
-                    __distance = __distance.sub(__distanceStep.mul(__vokenBalance.div(__allocation.amount)));
-                }
-
-                if (__distance > __distanceMin) {
-                    __distance = __distanceMin;
-                }
-
-                uint256 __timestamp = __allocation.timestamp.add(__distance);
-                if (now > __timestamp) {
-                    uint256 __passed = now.sub(__timestamp).div(__interval).add(1);
-
-                    if (__passed >= __steps) {
-                        reserved = reserved.add(__allocation.amount);
+                    // shorten the distance, by Voken referral, at least 120 days.
+                    if (__vokenReferral > __allocation.amount) {
+                        __distance = __distance.sub(__vokenReferral.div(__allocation.amount).mul(1 days));
+                        if (__distance > 120 days) {
+                            __distance = 120 days;
+                        }
                     }
-                    else {
-                        reserved = reserved.add(__allocation.amount.mul(__passed).div(__steps));
+
+                    // shorten the distance, by Voken holding
+                    if (__vokenBalance > __allocation.amount) {
+                        __distance = __distance.sub(__vokenBalance.div(__allocation.amount).mul(30 days));
+                    }
+
+                    // at least: 90 days
+                    if (__distance > 90 days) {
+                        __distance = 90 days;
+                    }
+
+                    // calc reserved
+                    uint256 __timestamp = __allocation.timestamp.add(__distance);
+                    if (now > __timestamp) {
+                        uint256 __passed = now.sub(__timestamp).div(1 days).add(1);
+
+                        if (__passed > 30) {
+                            __reserved = __reserved.sub(__allocation.amount);
+                        }
+                        else {
+                            __reserved = __reserved.sub(__allocation.amount.mul(__passed).div(30));
+                        }
                     }
                 }
             }
+
+            return __reserved;
         }
-    }
 
-
-
-
-
-
-
-
-
-    /**
-     * @dev Throws if called by account which is not a proxy.
-     */
-    modifier onlyProxy() {
-        require(isProxy(msg.sender), "ProxyRole: caller does not have the Proxy role");
-        _;
-    }
-
-    /**
-     * @dev Returns true if the `account` has the Proxy role.
-     */
-    function isProxy(address account) public view returns (bool) {
-        return _proxies.has(account);
-    }
-
-    /**
-     * @dev Give an `account` access to the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function addProxy(address account) public onlyOwner {
-        _proxies.add(account);
-        emit ProxyAdded(account);
-    }
-
-    /**
-     * @dev Remove an `account` access from the Proxy role.
-     *
-     * Can only be called by the current owner.
-     */
-    function removeProxy(address account) public onlyOwner {
-        _proxies.remove(account);
-        emit ProxyRemoved(account);
+        return 0;
     }
 }
