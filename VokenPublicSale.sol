@@ -444,7 +444,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     uint16[15] private REWARDS_PCT = [6, 6, 5, 4, 3, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1];
 
     // Limit
-    uint16[] private LIMIT_COUNTER = [1, 1, 10, 50, 100, 200, 300];
+    uint16[] private LIMIT_COUNTER = [1, 3, 10, 50, 100, 200, 300];
     uint256[] private LIMIT_WEIS = [100 ether, 50 ether, 40 ether, 30 ether, 20 ether, 10 ether, 5 ether];
     uint256 private LIMIT_WEI_MIN = 3 ether;
 
