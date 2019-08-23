@@ -448,8 +448,9 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
     uint256[] private LIMIT_WEIS = [100 ether, 50 ether, 40 ether, 30 ether, 20 ether, 10 ether, 5 ether];
     uint256 private LIMIT_WEI_MIN = 3 ether;
 
-    // 6,000 000 gas mininum
-    uint24 private GAS_MIN = 6000000;
+    // Gas
+    uint24 private GAS_MIN = 6470000;
+    uint24 private GAS_EX = 4000000;
 
     // Price
     uint256 private VOKEN_USD_PRICE_START = 1000;       // $      0.00100 USD
@@ -789,14 +790,6 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
         return _seasonAccountReferrals[seasonNumber][account];
     }
 
-
-
-
-
-
-
-
-
     /**
      * @dev Voken price in USD, by `stageIndex`.
      */
@@ -997,6 +990,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
      * @dev Receive ETH, and excute the exchange.
      */
     function () external payable whenNotPaused {
+        require(gasleft() >= GAS_MIN, "VokenPublicSale: Gas is not enough");
         require(_etherUsdPrice > 0, "VokenPublicSale2: Audit ETH price is zero");
         require(_stage <= STAGE_MAX, "VokenPublicSale2: Voken Public-Sale Completled");
 
@@ -1022,7 +1016,7 @@ contract VokenPublicSale2 is Ownable, Pausable, IAllocation {
             _cache();
 
             // USD => Voken
-            while (gasleft() > GAS_MIN && __usdRemain > 0 && _stage <= STAGE_LIMIT) {
+            while (gasleft() > GAS_EX && __usdRemain > 0 && _stage <= STAGE_LIMIT) {
                 uint256 __txVokenIssued;
                 (__txVokenIssued, __usdRemain) = _tx(__usdRemain);
                 __voken = __voken.add(__txVokenIssued);
