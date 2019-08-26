@@ -200,5 +200,4 @@ contract VokenPanel is Ownable {
         safeMode = _VOKEN.safeMode();
         (, burningMode) = _VOKEN.burningMode();
     }
-
 }
