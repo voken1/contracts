@@ -302,11 +302,13 @@ contract VokenPanel is Ownable {
     }
 
     function voken2() public view returns (uint256 totalSupply,
+                                           uint256 whitelistCounter,
                                            bool whitelistingMode,
                                            bool safeMode,
                                            bool burningMode) {
         totalSupply = _VOKEN.totalSupply();
 
+        whitelistCounter = _VOKEN.whitelistCounter()
         whitelistingMode = _VOKEN.whitelistingMode();
         safeMode = _VOKEN.safeMode();
         (burningMode,) = _VOKEN.burningMode();
