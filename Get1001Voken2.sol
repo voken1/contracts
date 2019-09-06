@@ -298,8 +298,8 @@ contract Get1001Voken2 is Ownable, Pausable {
     using SafeMath256 for uint256;
 
     // Addresses
-    IVoken2 private _VOKEN = IVoken2(0x41E214c1af490233341DDE0c4fc455a523Bc0a0f);
-    VokenPublicSale private _PUBLIC_SALE = VokenPublicSale(0xBb7D0db53F9146f58F00d9Ca536675BA899f85Ab);
+    IVoken2 private _VOKEN = IVoken2(0xFfFAb974088Bd5bF3d7E6F522e93Dd7861264cDB);
+    VokenPublicSale private _PUBLIC_SALE = VokenPublicSale(0x2FA51d35d6731eb4e0E26229F0180e2D249Ea0A5);
 
     uint256 private WEI_MIN = 1 ether;
     uint256 private VOKEN_PER_TX = 1001000000; // 1001.000000 Voken2.0

@@ -129,9 +129,7 @@ interface VokenPublicSale {
                                          uint256 weiRewarded,
                                          uint256 weiShareholders,
                                          uint256 weiTeam,
-                                         uint256 weiPended,
-                                         uint256 usdSold,
-                                         uint256 usdRewarded);
+                                         uint256 weiPended);
     function transactions() external view returns(uint256 txs,
                                                   uint256 vokenIssuedTxs,
                                                   uint256 vokenBonusTxs);
@@ -140,19 +138,14 @@ interface VokenPublicSale {
                                                                   uint256 vokenReferral,
                                                                   uint256 vokenReferrals,
                                                                   uint256 weiPurchased,
-                                                                  uint256 weiRewarded,
-                                                                  uint256 usdPurchased,
-                                                                  uint256 usdRewarded);
+                                                                  uint256 weiRewarded);
     function accountInSeason(address account, uint16 seasonNumber) external view returns (uint256 vokenIssued,
                                                                                           uint256 vokenBonus,
                                                                                           uint256 vokenReferral,
                                                                                           uint256 vokenReferrals,
                                                                                           uint256 weiPurchased,
                                                                                           uint256 weiReferrals,
-                                                                                          uint256 weiRewarded,
-                                                                                          uint256 usdPurchased,
-                                                                                          uint256 usdReferrals,
-                                                                                          uint256 usdRewarded);
+                                                                                          uint256 weiRewarded);
     function seasonReferrals(uint16 seasonNumber) external view returns (address[] memory);
     function seasonAccountReferrals(uint16 seasonNumber, address account) external view returns (address[] memory);
     function reservedOf(address account) external view returns (uint256);
@@ -185,10 +178,9 @@ contract VokenPublicSalePanel is Ownable {
                                            uint256 txs,
                                            uint256 vokenIssued,
                                            uint256 vokenBonus,
-                                           uint256 weiRewarded,
-                                           uint256 usdRewarded) {
+                                           uint256 weiRewarded) {
         (stage, season, etherUsdPrice, vokenUsdPrice, shareholdersRatio) = _PUBLIC_SALE.status();
-        (vokenIssued, vokenBonus, , weiRewarded, , , , usdRewarded, ) = _PUBLIC_SALE.sum();
+        (vokenIssued, vokenBonus, , weiRewarded, , , , ) = _PUBLIC_SALE.sum();
         (txs, ,) = _PUBLIC_SALE.transactions();
     }
 
@@ -197,9 +189,8 @@ contract VokenPublicSalePanel is Ownable {
                                                                 uint256 vokenReferral,
                                                                 uint256 vokenReferrals,
                                                                 uint256 weiRewarded,
-                                                                uint256 usdRewarded,
                                                                 uint256 reserved) {
-        (vokenIssued, vokenBonus, vokenReferral, vokenReferrals, , weiRewarded, , usdRewarded) = _PUBLIC_SALE.queryAccount(account);
+        (vokenIssued, vokenBonus, vokenReferral, vokenReferrals, , weiRewarded, ,) = _PUBLIC_SALE.queryAccount(account);
         reserved = _PUBLIC_SALE.reservedOf(account);
     }
 
@@ -207,8 +198,7 @@ contract VokenPublicSalePanel is Ownable {
                                                                                              uint256 vokenBonus,
                                                                                              uint256 vokenReferral,
                                                                                              uint256 vokenReferrals,
-                                                                                             uint256 weiRewarded,
-                                                                                             uint256 usdRewarded) {
-        (vokenIssued, vokenBonus, vokenReferral, vokenReferrals, , , weiRewarded, , , usdRewarded) = _PUBLIC_SALE.accountInSeason(account, seasonNumber);
+                                                                                             uint256 weiRewarded) {
+        (vokenIssued, vokenBonus, vokenReferral, vokenReferrals, , , weiRewarded, , ,) = _PUBLIC_SALE.accountInSeason(account, seasonNumber);
     }
 }
